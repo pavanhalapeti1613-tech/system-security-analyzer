@@ -1,0 +1,6 @@
+{
+  "name": "SecureCheck – Windows Security Health Analyzer",
+  "description": "A beginner-friendly Windows cybersecurity health analyzer that guides users through safe PowerShell audit commands, evaluates results locally, and generates professional security reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
