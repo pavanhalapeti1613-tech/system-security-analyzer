@@ -1325,13 +1325,25 @@ body {
 
 /* Developer Approval Card inside Report */
 .report-approval-card {
-  background-color: var(--bg-surface-elevated);
-  border: 1px solid var(--border-cyber);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(10, 15, 30, 0.98));
+  border: 1px solid rgba(0, 240, 255, 0.3);
   border-radius: var(--radius-md);
-  padding: 24px;
-  margin-top: 20px;
-  margin-bottom: 28px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 240, 255, 0.08);
+  padding: 28px;
+  margin-top: 24px;
+  margin-bottom: 32px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 240, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.report-approval-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--accent-cyan), var(--accent-green));
 }
 
 .approval-header {
@@ -1339,38 +1351,40 @@ body {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 16px;
-  margin-bottom: 20px;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 18px;
+  margin-bottom: 24px;
 }
 
 .approval-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: var(--accent-cyan);
+  gap: 10px;
+  color: #ffffff;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
 }
 
 .approval-badge-icon {
-  width: 22px;
-  height: 22px;
-  background: rgba(0, 240, 255, 0.15);
-  border: 1px solid var(--accent-cyan);
+  width: 26px;
+  height: 26px;
+  background: rgba(0, 255, 119, 0.15);
+  border: 1px solid var(--accent-green);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
-  color: var(--accent-cyan);
+  font-size: 0.85rem;
+  color: var(--accent-green);
+  box-shadow: 0 0 10px rgba(0, 255, 119, 0.3);
 }
 
 .approval-subtext {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-family: var(--font-mono);
   margin-top: 4px;
 }
@@ -1379,94 +1393,157 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: rgba(0, 255, 119, 0.1);
-  border: 1px solid rgba(0, 255, 119, 0.4);
+  background: rgba(0, 255, 119, 0.08);
+  border: 1px solid rgba(0, 255, 119, 0.35);
   color: var(--accent-green);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
-  padding: 5px 12px;
+  letter-spacing: 0.05em;
+  padding: 6px 14px;
   border-radius: var(--radius-sm);
-  box-shadow: 0 0 10px rgba(0, 255, 119, 0.15);
+  box-shadow: 0 0 12px rgba(0, 255, 119, 0.15);
 }
 
 .approval-body {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  gap: 32px;
+  align-items: start;
 }
 
-.approval-sign-box {
+@media (max-width: 860px) {
+  .approval-body {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+.signature-block-placeholder {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-}
-
-.sign-label {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-}
-
-.sign-image-frame {
-  width: 140px;
-  height: 100px;
+  gap: 6px;
   background: #ffffff;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-cyber);
-  padding: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 240, 255, 0.2);
+  border-radius: 8px;
+  padding: 24px 28px;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-sizing: border-box;
 }
 
-.approval-sign-img {
-  max-width: 100%;
-  max-height: 100%;
+.signature-block-img {
+  max-width: 220px;
+  width: 100%;
+  height: auto;
+  max-height: 80px;
   object-fit: contain;
   display: block;
+  margin-bottom: 8px;
+  filter: contrast(1.1);
+}
+
+.signature-block-role {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: #111827;
+  line-height: 1.3;
+  margin: 0;
+  padding: 0;
+}
+
+.signature-block-org {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 0.98rem;
+  font-weight: 400;
+  color: #374151;
+  line-height: 1.35;
+  margin: 0;
+  padding: 0;
 }
 
 .approval-meta-box {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  flex: 1;
-  min-width: 250px;
+  gap: 14px;
+}
+
+.approval-ledger-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 10px;
+}
+
+.approval-meta-table {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
 }
 
 .approval-meta-row {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   font-family: var(--font-mono);
 }
 
 .approval-meta-row .meta-label {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   min-width: 140px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 
 .approval-meta-row .meta-value {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 500;
+  word-break: break-all;
 }
 
 .approval-meta-row .meta-value.status-approved {
   color: var(--accent-green);
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+  display: inline-block;
+}
+
+.approval-meta-row .meta-value.sha-code {
+  color: #38bdf8;
+  font-weight: 600;
+  font-size: 0.78rem;
+  background: rgba(56, 189, 248, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
 }
 
 /* Hardened Verification View */
