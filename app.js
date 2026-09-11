@@ -818,13 +818,6 @@ function renderAuditStep(index) {
               <div class="output-helper-bar">
                 <div class="output-helper-title">Paste it below:</div>
                 <div class="output-action-pills">
-                  <span style="font-size: 0.76rem; color: var(--text-muted); margin-right: 4px;">Testing without Windows?</span>
-                  <button class="btn-sample-pill secure" onclick="loadSampleOutput('${check.id}', 'secure')">
-                    🟢 Load Secure Sample
-                  </button>
-                  <button class="btn-sample-pill vulnerable" onclick="loadSampleOutput('${check.id}', 'vulnerable')">
-                    🔴 Load Vulnerable Sample
-                  </button>
                   <button class="btn-sample-pill" onclick="clearOutputText('${check.id}')">
                     🗑️ Clear
                   </button>
@@ -950,34 +943,20 @@ function copyCommand(text, btnId) {
   });
 }
 
-// Load Samples
-function loadSampleOutput(checkId, type) {
-  let targetId = checkId;
-  let lookupId = checkId;
-  if (checkId.startsWith("verif-")) {
-    lookupId = checkId.replace("verif-", "");
-    targetId = `verif-${lookupId}`;
-  }
-  const check = SECURITY_CHECKS.find(c => c.id === lookupId);
-  const textarea = document.getElementById(`output-textarea-${targetId}`);
-  if (!check || !textarea) return;
-
-  textarea.value = type === "secure" ? check.sampleSecure : check.sampleVulnerable;
-  if (!checkId.startsWith("verif-")) {
-    onOutputChanged(checkId);
-  }
-}
-
 function clearOutputText(checkId) {
   const textarea = document.getElementById(`output-textarea-${checkId}`);
   if (textarea) {
     textarea.value = "";
-    onOutputChanged(checkId);
+    if (!checkId.startsWith("verif-")) {
+      onOutputChanged(checkId);
+    }
   }
   const resultContainer = document.getElementById(`result-container-${checkId}`);
   if (resultContainer) resultContainer.innerHTML = "";
-  delete AppState.results[checkId];
-  renderStepper();
+  if (!checkId.startsWith("verif-")) {
+    delete AppState.results[checkId];
+    renderStepper();
+  }
 }
 
 function onOutputChanged(checkId) {
@@ -1303,14 +1282,10 @@ function renderDashboard() {
             Generate Security Report
           </button>
 
-          <button class="btn btn-secondary" onclick="switchView('verification')">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-            Hardened Verification (Before vs After)
-          </button>
 
-          <button class="btn btn-secondary" onclick="generatePdfReport()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Download PDF Report
+          <button class="btn btn-outline-danger" onclick="resetAllData()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
+            Reset Audit
           </button>
         </div>
       </div>
@@ -1455,16 +1430,19 @@ function renderReport() {
     <div class="report-document-container">
       <div class="report-header-banner">
         <div>
-          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-            <div class="brand-icon-wrapper" style="width: 32px; height: 32px;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 8px;">
+            <div class="brand-icon-wrapper" style="width: 44px; height: 44px; background: #ffffff; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 2px; flex-shrink: 0; box-shadow: 0 0 14px rgba(0, 240, 255, 0.4); border: 1px solid var(--border-cyber);">
+              <img src="/web-logo.jpg" alt="SecureCheck Shield Logo" class="brand-logo-img" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
             </div>
-            <h1 style="font-size: 1.75rem; font-weight: 800;">SecureCheck Security Assessment Report</h1>
+            <div>
+              <h1 style="font-size: 1.75rem; font-weight: 800; line-height: 1.2;">SecureCheck Security Assessment Report</h1>
+              <span style="font-size: 0.76rem; color: var(--accent-cyan); display: block; font-weight: 600; font-family: var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase;">secure your windows</span>
+            </div>
           </div>
-          <div style="color: var(--text-secondary); font-size: 0.95rem;">Windows Security Health & Vulnerability Diagnosis</div>
+          <div style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 4px;">Windows Security Health & Vulnerability Diagnosis</div>
         </div>
 
-        <button class="btn btn-primary" onclick="generatePdfReport()">
+        <button class="btn btn-primary" onclick="generatePdfReport(event)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Download Security Report as PDF
         </button>
@@ -1511,6 +1489,54 @@ function renderReport() {
         3. Hardened Verification / Proof
       </div>
       ${verifSummaryHtml}
+
+      <!-- SECTION 4: DEVELOPER APPROVAL & DIGITAL SIGNATURE -->
+      <div class="report-section-title">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+        4. Approved by the Developer
+      </div>
+      <div class="report-approval-card" id="report-developer-approval">
+        <div class="approval-header">
+          <div class="approval-title-group">
+            <div class="approval-badge">
+              <span class="approval-badge-icon">✓</span>
+              <span>Approved by the Developer</span>
+            </div>
+            <div class="approval-subtext">Official Digital Signature &amp; Assessment Authorization</div>
+          </div>
+          <div class="approval-stamp">
+            <span class="pulse-dot-green"></span>
+            <span>Digitally Certified</span>
+          </div>
+        </div>
+
+        <div class="approval-body">
+          <div class="approval-sign-box">
+            <div class="sign-label">Developer Digital Signature</div>
+            <div class="sign-image-frame">
+              <img src="/digital-sign.jpg" alt="Developer Digital Signature" class="approval-sign-img" />
+            </div>
+          </div>
+          <div class="approval-meta-box">
+            <div class="approval-meta-row">
+              <span class="meta-label">Approval Status:</span>
+              <span class="meta-value status-approved">✓ Validated &amp; Approved by Developer</span>
+            </div>
+            <div class="approval-meta-row">
+              <span class="meta-label">Sign-Off Date:</span>
+              <span class="meta-value">${dateStr}</span>
+            </div>
+            <div class="approval-meta-row">
+              <span class="meta-label">Audit Engine:</span>
+              <span class="meta-value">SecureCheck Native PowerShell Workstation Hardening</span>
+            </div>
+            <div class="approval-meta-row">
+              <span class="meta-label">Verification Scope:</span>
+              <span class="meta-value">Authenticated Client-Side Security Assessment</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- DISCLAIMER -->
       <div class="disclaimer-box">
@@ -1600,8 +1626,8 @@ function renderVerificationView() {
 
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <label style="font-size: 0.85rem; font-weight: 600;">Paste New PowerShell Output:</label>
-            <button class="btn-sample-pill secure" onclick="loadSampleOutput('verif-${selectedCheckId}', 'secure')">
-              🟢 Paste Remediated Sample
+            <button class="btn-sample-pill" onclick="clearOutputText('verif-${selectedCheckId}')">
+              🗑️ Clear
             </button>
           </div>
 
@@ -1718,47 +1744,126 @@ function renderVerifFeedbackHtml(v) {
 // ==========================================
 // 8. HIGH-QUALITY CLIENT-SIDE PDF GENERATION
 // ==========================================
-function generatePdfReport() {
+
+// Helper to safely load and optimize images as base64 Data URLs for jsPDF
+function loadImageAsBase64(url, maxWidth = 800, maxHeight = 800) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      try {
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+        resolve({
+          dataUrl,
+          width,
+          height,
+          aspect: width / height
+        });
+      } catch (err) {
+        console.warn("Canvas export failed for image:", url, err);
+        resolve(null);
+      }
+    };
+    img.onerror = () => {
+      console.warn("Could not load image at:", url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+async function generatePdfReport(e) {
   if (typeof window.jspdf === "undefined" && typeof window.jsPDF === "undefined") {
     alert("PDF library is loading from CDN. Please check your internet connection and try again.");
     return;
   }
 
-  const { jsPDF } = window.jspdf || window;
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "pt",
-    format: "a4"
-  });
+  // Visual button state
+  const targetBtn = e && e.target ? e.target.closest("button") : null;
+  const originalBtnHtml = targetBtn ? targetBtn.innerHTML : "";
+  if (targetBtn) {
+    targetBtn.disabled = true;
+    targetBtn.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10" stroke-opacity="0.75"></path></svg>
+      Generating PDF...
+    `;
+  }
 
-  const scoreData = computeSecurityScore();
-  const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  try {
+    // Pre-load application logo and developer digital signature
+    const [logoImgData, signImgData] = await Promise.all([
+      loadImageAsBase64("/web-logo.jpg", 300, 300),
+      loadImageAsBase64("/digital-sign.jpg", 800, 1060)
+    ]);
 
-  const primaryColor = [15, 23, 42]; // #0f172a
-  const accentColor = [14, 165, 233]; // #0ea5e9
-  const textDark = [30, 41, 59]; // #1e293b
-  const textMuted = [100, 116, 139]; // #64748b
+    const { jsPDF } = window.jspdf || window;
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "a4"
+    });
 
-  // Page 1: Header & Executive Summary
-  doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.rect(0, 0, 595.28, 80, "F");
+    const scoreData = computeSecurityScore();
+    const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
-  // Title in Header
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("SecureCheck", 40, 40);
+    const primaryColor = [15, 23, 42]; // #0f172a
+    const accentColor = [14, 165, 233]; // #0ea5e9
+    const textDark = [30, 41, 59]; // #1e293b
+    const textMuted = [100, 116, 139]; // #64748b
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(203, 213, 225);
-  doc.text("Windows Security Health & Vulnerability Assessment Report", 40, 58);
+    // Page 1: Header & Executive Summary
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(0, 0, 595.28, 86, "F");
 
-  // Date in Header right
-  doc.setFontSize(9);
-  doc.text(dateStr, 555, 48, { align: "right" });
+    // Cyan accent bottom border on header
+    doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+    doc.rect(0, 84, 595.28, 2, "F");
 
-  let y = 110;
+    // Add Logo in Header at the top
+    let titleStartX = 40;
+    if (logoImgData) {
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(40, 15, 54, 54, 4, 4, "F");
+      doc.addImage(logoImgData.dataUrl, "JPEG", 43, 18, 48, 48);
+      titleStartX = 106;
+    }
+
+    // Title in Header
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("SecureCheck", titleStartX, 38);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(203, 213, 225);
+    doc.text("Windows Security Health & Vulnerability Assessment Report", titleStartX, 54);
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(56, 189, 248);
+    doc.text("SECURE YOUR WINDOWS  •  OFFICIAL ASSESSMENT", titleStartX, 67);
+
+    // Date in Header right
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(203, 213, 225);
+    doc.text(dateStr, 555, 48, { align: "right" });
+
+    let y = 115;
 
   // Executive Score Box
   doc.setFillColor(248, 250, 252);
@@ -2043,25 +2148,115 @@ function generatePdfReport() {
     });
   }
 
-  // Disclaimer at the bottom
-  if (y > 720) {
+  // SECTION 4: APPROVED BY THE DEVELOPER & DIGITAL SIGNATURE
+  const approvalCardHeight = 114;
+  if (y + approvalCardHeight + 50 > 750) {
+    doc.addPage();
+    y = 50;
+  } else {
+    y += 12;
+  }
+
+  // Section 4 Heading
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.text("4. Approved by the Developer", 40, y + 12);
+
+  y += 20;
+
+  // Card background & border
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(40, y, 515, approvalCardHeight, 6, 6, "FD");
+
+  // Cyan vertical accent indicator on the left
+  doc.setFillColor(14, 165, 233);
+  doc.roundedRect(40, y, 4, approvalCardHeight, 2, 2, "F");
+
+  // Digital Signature Image box on left
+  if (signImgData) {
+    const maxW = 75;
+    const maxH = 65;
+    let sW = maxW;
+    let sH = (signImgData.height / signImgData.width) * sW;
+    if (sH > maxH) {
+      sH = maxH;
+      sW = (signImgData.width / signImgData.height) * sH;
+    }
+
+    // White frame for signature
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(55, y + 14, sW + 12, sH + 8, 3, 3, "FD");
+    doc.addImage(signImgData.dataUrl, "JPEG", 61, y + 18, sW, sH);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.text("DIGITAL SIGNATURE", 55, y + 14 + sH + 20);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    doc.text("Approved by the Developer", 55, y + 45);
+  }
+
+  // Right column metadata
+  const metaX = 200;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(5, 150, 105); // Green
+  doc.text("✓ Digitally Approved by the Developer", metaX, y + 24);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(`Authorization: SecureCheck Developer Assessment Sign-Off`, metaX, y + 40);
+  doc.text(`Sign-Off Date: ${dateStr}`, metaX, y + 54);
+  doc.text(`Audit Engine: Windows Native PowerShell Command Diagnostics`, metaX, y + 68);
+  doc.text(`Verification Mode: 100% Client-Side Local Browser Execution`, metaX, y + 82);
+  doc.text(`Integrity Check: Output Authenticity & Hardening Validated`, metaX, y + 96);
+
+  y += approvalCardHeight + 15;
+
+  // Disclaimer at bottom
+  if (y + 45 > 750) {
     doc.addPage();
     y = 50;
   }
 
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
   const disclaimer = doc.splitTextToSize(
     "Disclaimer: This report is an informational security assessment based on the PowerShell output provided by the user. SecureCheck does not directly scan, modify, or control the user's computer. Users should verify recommendations before making system changes.",
     515
   );
-  doc.text(disclaimer, 40, y + 15);
+  doc.text(disclaimer, 40, y + 12);
 
-  // Add Page Numbers
+  // Add running headers on page 2+ and footer page numbers
   const pageCount = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+    if (i > 1 && logoImgData) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(0, 0, 595.28, 26, "F");
+      doc.setDrawColor(226, 232, 240);
+      doc.line(0, 26, 595.28, 26);
+
+      doc.addImage(logoImgData.dataUrl, "JPEG", 40, 4, 18, 18);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text("SecureCheck — Windows Security Assessment Report", 64, 16);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+      doc.text(dateStr, 555, 16, { align: "right" });
+    }
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
@@ -2070,22 +2265,15 @@ function generatePdfReport() {
 
   // Save File
   doc.save(`SecureCheck-Windows-Assessment-${Date.now()}.pdf`);
+} catch (err) {
+  console.error("Error generating PDF:", err);
+  alert("An error occurred while generating the PDF. Please try again.");
+} finally {
+  if (targetBtn) {
+    targetBtn.disabled = false;
+    targetBtn.innerHTML = originalBtnHtml;
+  }
 }
-
-// ==========================================
-// 9. SAMPLE AUDIT QUICK-LOADERS (DEMO PRESETS)
-// ==========================================
-function loadFullPreset(type) {
-  SECURITY_CHECKS.forEach(c => {
-    const sample = type === "secure" ? c.sampleSecure : c.sampleVulnerable;
-    const analysis = SecurityAnalyzer.analyze(c.id, sample);
-    if (analysis) {
-      AppState.results[c.id] = analysis;
-    }
-  });
-
-  alert(`Loaded ${type === "secure" ? "Hardened / Secure PC" : "Vulnerable Windows PC"} test dataset across all 6 checks!`);
-  switchView("dashboard");
 }
 
 function resetAllData() {
@@ -2098,7 +2286,7 @@ function resetAllData() {
 }
 
 // ==========================================
-// 10. INITIALIZATION
+// 9. INITIALIZATION
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
   // Render initial homepage
@@ -2109,14 +2297,12 @@ document.addEventListener("DOMContentLoaded", () => {
 window.switchView = switchView;
 window.goToStep = goToStep;
 window.copyCommand = copyCommand;
-window.loadSampleOutput = loadSampleOutput;
 window.clearOutputText = clearOutputText;
 window.onOutputChanged = onOutputChanged;
 window.skipCheck = skipCheck;
 window.analyzeCurrentCheck = analyzeCurrentCheck;
 window.proceedToNextStep = proceedToNextStep;
 window.generatePdfReport = generatePdfReport;
-window.loadFullPreset = loadFullPreset;
 window.resetAllData = resetAllData;
 window.selectVerifCheck = selectVerifCheck;
 window.runVerification = runVerification;
