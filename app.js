@@ -700,23 +700,8 @@ const AppState = {
   currentView: "home", // "home", "audit", "dashboard", "report", "verification"
   activeStepIndex: 0,
   results: {}, // key: checkId -> result object or { skipped: true }
-  verificationResults: {}, // key: checkId -> { before, after, verified: bool, newResult }
-  theme: localStorage.getItem("securecheck_theme") || "dark"
+  verificationResults: {} // key: checkId -> { before, after, verified: bool, newResult }
 };
-
-// Initialize Theme
-function applyTheme(theme) {
-  AppState.theme = theme;
-  document.documentElement.setAttribute("data-theme", theme);
-  localStorage.setItem("securecheck_theme", theme);
-  const themeBtn = document.getElementById("themeToggleBtn");
-  if (themeBtn) {
-    themeBtn.innerHTML = theme === "dark" 
-      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
-      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
-    themeBtn.setAttribute("title", `Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`);
-  }
-}
 
 // Navigation Controller
 function switchView(viewName) {
@@ -1183,9 +1168,11 @@ function computeSecurityScore() {
     }
   });
 
+  const isUnavailable = totalAssessedWeight === 0 || skippedCount === SECURITY_CHECKS.length;
+
   // Calculate normalized 0-100 score based on checks completed
   let finalScore = 0;
-  if (totalAssessedWeight > 0) {
+  if (!isUnavailable) {
     finalScore = Math.round((earnedScore / totalAssessedWeight) * 100);
   }
 
@@ -1194,7 +1181,12 @@ function computeSecurityScore() {
   let riskLabel = "🟢 LOW RISK – SYSTEM HARDENED";
   let riskSummary = "Your Windows workstation demonstrates strong cybersecurity hygiene across the assessed parameters.";
 
-  if (dangerCount >= 2 || finalScore < 60) {
+  if (isUnavailable) {
+    overallRisk = "NOT ASSESSED";
+    riskClass = "risk-unassessed";
+    riskLabel = "⚪ SCORE UNAVAILABLE – CHECKS SKIPPED";
+    riskSummary = "All security audit checks were skipped. A security score cannot be calculated until at least one test has been analyzed.";
+  } else if (dangerCount >= 2 || finalScore < 60) {
     overallRisk = "CRITICAL";
     riskClass = "risk-danger";
     riskLabel = "🔴 HIGH RISK – CRITICAL WEAKNESSES DETECTED";
@@ -1207,7 +1199,9 @@ function computeSecurityScore() {
   }
 
   return {
-    score: finalScore,
+    score: isUnavailable ? null : finalScore,
+    isUnavailable,
+    scoreDisplay: isUnavailable ? "Score Unavailable" : `${finalScore} / 100`,
     earnedScore,
     totalAssessedWeight,
     secureCount,
@@ -1228,8 +1222,10 @@ function renderDashboard() {
   const scoreData = computeSecurityScore();
 
   let scoreColor = "var(--secure-green)";
-  if (scoreData.score < 60) scoreColor = "var(--danger-red)";
-  else if (scoreData.score < 85) scoreColor = "var(--warning-yellow)";
+  if (!scoreData.isUnavailable) {
+    if (scoreData.score < 60) scoreColor = "var(--danger-red)";
+    else if (scoreData.score < 85) scoreColor = "var(--warning-yellow)";
+  }
 
   let checksGridHtml = "";
   SECURITY_CHECKS.forEach(c => {
@@ -1273,11 +1269,21 @@ function renderDashboard() {
   container.innerHTML = `
     <div class="dashboard-hero-card">
       <div class="score-display-column">
-        <div class="score-circle-wrapper" style="border-color: ${scoreColor};">
-          <div class="score-number" style="color: ${scoreColor};">${scoreData.score}</div>
-          <div class="score-max">/ 100</div>
-        </div>
-        <div class="score-label">Your Security Score</div>
+        ${scoreData.isUnavailable ? `
+          <div class="score-circle-wrapper unassessed">
+            <div class="score-number" style="color: var(--text-secondary); font-size: 1.35rem; line-height: 1.25; text-align: center; font-family: var(--font-mono); padding: 0 6px;">
+              Score<br>Unavailable
+            </div>
+            <div class="score-max" style="margin-top: 6px;">0 of 6 assessed</div>
+          </div>
+          <div class="score-label" style="color: var(--text-muted);">Score Unavailable</div>
+        ` : `
+          <div class="score-circle-wrapper" style="border-color: ${scoreColor};">
+            <div class="score-number" style="color: ${scoreColor};">${scoreData.score}</div>
+            <div class="score-max">/ 100</div>
+          </div>
+          <div class="score-label">Your Security Score</div>
+        `}
       </div>
 
       <div class="dashboard-summary-column">
@@ -1471,7 +1477,9 @@ function renderReport() {
         </div>
         <div class="report-meta-item">
           <label>Security Score</label>
-          <strong style="font-size: 1.15rem; color: var(--accent-cyan);">${scoreData.score} / 100</strong>
+          <strong style="font-size: 1.15rem; color: ${scoreData.isUnavailable ? 'var(--text-secondary)' : 'var(--accent-cyan)'};">
+            ${scoreData.isUnavailable ? 'Score Unavailable' : `${scoreData.score} / 100`}
+          </strong>
         </div>
         <div class="report-meta-item">
           <label>Overall Risk Level</label>
@@ -1757,39 +1765,64 @@ function generatePdfReport() {
   doc.setDrawColor(226, 232, 240);
   doc.roundedRect(40, y, 515, 95, 6, 6, "FD");
 
-  // Score Number
-  let scoreRgb = [16, 185, 129];
-  if (scoreData.score < 60) scoreRgb = [239, 68, 68];
-  else if (scoreData.score < 85) scoreRgb = [245, 158, 11];
+  if (scoreData.isUnavailable) {
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text("Unavailable", 65, y + 50);
 
-  doc.setTextColor(scoreRgb[0], scoreRgb[1], scoreRgb[2]);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(36);
-  doc.text(`${scoreData.score}`, 70, y + 55);
+    doc.setFontSize(8.5);
+    doc.text("ALL CHECKS SKIPPED", 65, y + 70);
 
-  doc.setFontSize(12);
-  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-  doc.text("/ 100", 125, y + 50);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.text("Overall Risk Level: NOT ASSESSED", 200, y + 36);
 
-  doc.setFontSize(9);
-  doc.text("SECURITY HEALTH SCORE", 60, y + 74);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    const splitSummary = doc.splitTextToSize(scoreData.riskSummary, 330);
+    doc.text(splitSummary, 200, y + 54);
 
-  // Overall Risk Text
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(scoreRgb[0], scoreRgb[1], scoreRgb[2]);
-  doc.text(`Overall Risk Level: ${scoreData.overallRisk}`, 180, y + 36);
+    doc.setFontSize(9);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.text(`Secure: 0   |   Needs Attention: 0   |   High-Risk: 0   |   Skipped: 6`, 200, y + 80);
+  } else {
+    // Score Number
+    let scoreRgb = [16, 185, 129];
+    if (scoreData.score < 60) scoreRgb = [239, 68, 68];
+    else if (scoreData.score < 85) scoreRgb = [245, 158, 11];
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5);
-  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-  const splitSummary = doc.splitTextToSize(scoreData.riskSummary, 350);
-  doc.text(splitSummary, 180, y + 54);
+    doc.setTextColor(scoreRgb[0], scoreRgb[1], scoreRgb[2]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(36);
+    doc.text(`${scoreData.score}`, 70, y + 55);
 
-  // Metrics summary
-  doc.setFontSize(9);
-  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-  doc.text(`Secure: ${scoreData.secureCount}   |   Needs Attention: ${scoreData.warningCount}   |   High-Risk: ${scoreData.dangerCount}   |   Skipped: ${scoreData.skippedCount}`, 180, y + 80);
+    doc.setFontSize(12);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.text("/ 100", 125, y + 50);
+
+    doc.setFontSize(9);
+    doc.text("SECURITY HEALTH SCORE", 60, y + 74);
+
+    // Overall Risk Text
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(scoreRgb[0], scoreRgb[1], scoreRgb[2]);
+    doc.text(`Overall Risk Level: ${scoreData.overallRisk}`, 180, y + 36);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    const splitSummary = doc.splitTextToSize(scoreData.riskSummary, 350);
+    doc.text(splitSummary, 180, y + 54);
+
+    // Metrics summary
+    doc.setFontSize(9);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.text(`Secure: ${scoreData.secureCount}   |   Needs Attention: ${scoreData.warningCount}   |   High-Risk: ${scoreData.dangerCount}   |   Skipped: ${scoreData.skippedCount}`, 180, y + 80);
+  }
 
   y += 115;
 
@@ -2068,16 +2101,6 @@ function resetAllData() {
 // 10. INITIALIZATION
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-  applyTheme(AppState.theme);
-
-  // Theme Toggle listener
-  const themeToggle = document.getElementById("themeToggleBtn");
-  if (themeToggle) {
-    themeToggle.addEventListener("click", () => {
-      applyTheme(AppState.theme === "dark" ? "light" : "dark");
-    });
-  }
-
   // Render initial homepage
   switchView("home");
 });
