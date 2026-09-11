@@ -785,7 +785,7 @@ function renderAuditStep(index) {
               <div class="instruction-label">Copy this command:</div>
               <div class="command-box">
                 <code class="command-code" id="cmd-text-${check.id}">${check.command}</code>
-                <button class="btn-copy" id="btn-copy-${check.id}" onclick="copyCommand('${check.command}', 'btn-copy-${check.id}')">
+                <button class="btn-copy" id="btn-copy-${check.id}" onclick="copyCheckCommand('${check.id}')">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -909,6 +909,21 @@ function goToStep(idx) {
   }
 }
 
+// HTML & Attribute Escaping Helpers
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str);
+}
+
 // Copy to Clipboard
 function copyCommand(text, btnId) {
   navigator.clipboard.writeText(text).then(() => {
@@ -941,6 +956,30 @@ function copyCommand(text, btnId) {
       }, 2000);
     }
   });
+}
+
+// Copy check command safely without breaking inline HTML attributes
+function copyCheckCommand(checkId) {
+  const chk = SECURITY_CHECKS.find(c => c.id === checkId);
+  if (chk && chk.command) {
+    copyCommand(chk.command, `btn-copy-${checkId}`);
+  }
+}
+
+// Copy remediation command safely without breaking inline HTML attributes
+function copyRemediation(checkId) {
+  const res = AppState.results[checkId];
+  if (res && res.remediationCmd) {
+    copyCommand(res.remediationCmd, `btn-copy-rem-${checkId}`);
+  }
+}
+
+// Copy report remediation command safely without breaking inline HTML attributes
+function copyReportRemediation(checkId, btnId) {
+  const res = AppState.results[checkId];
+  if (res && res.remediationCmd) {
+    copyCommand(res.remediationCmd, btnId);
+  }
 }
 
 function clearOutputText(checkId) {
@@ -1088,8 +1127,8 @@ function renderResultCardHtml(result) {
             ${result.recommendedAction}
             ${result.remediationCmd ? `
               <div class="remediation-code-box">
-                <code>${result.remediationCmd}</code>
-                <button class="btn-copy" onclick="copyCommand('${result.remediationCmd.replace(/'/g, "\\'")}', 'btn-copy-rem-${result.checkId}')" id="btn-copy-rem-${result.checkId}">
+                <code>${escapeHtml(result.remediationCmd)}</code>
+                <button class="btn-copy" onclick="copyRemediation('${result.checkId}')" id="btn-copy-rem-${result.checkId}">
                   Copy Fix
                 </button>
               </div>
@@ -1102,7 +1141,7 @@ function renderResultCardHtml(result) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
             Evidence detected from your PowerShell output
           </div>
-          <div class="evidence-quote-box">${result.evidence}</div>
+          <div class="evidence-quote-box">${escapeHtml(result.evidence)}</div>
         </div>
       </div>
 
@@ -1396,8 +1435,8 @@ function renderReport() {
           </p>
           ${result.remediationCmd ? `
             <div class="remediation-code-box">
-              <code>${result.remediationCmd}</code>
-              <button class="btn-copy" onclick="copyCommand('${result.remediationCmd.replace(/'/g, "\\'")}', 'btn-copy-rep-${idx}')" id="btn-copy-rep-${idx}">
+              <code>${escapeHtml(result.remediationCmd)}</code>
+              <button class="btn-copy" onclick="copyReportRemediation('${check.id}', 'btn-copy-rep-${idx}')" id="btn-copy-rep-${idx}">
                 Copy Remediation
               </button>
             </div>
@@ -1611,7 +1650,7 @@ function renderVerificationView() {
           <textarea 
             class="output-textarea" 
             id="output-textarea-verif-${selectedCheckId}" 
-            placeholder="Run '${check.command}' in PowerShell after remediation and paste new output here..."
+            placeholder="Run '${escapeAttr(check.command)}' in PowerShell after remediation and paste new output here..."
             rows="5"
           >${existingVerif?.newOutput || ""}</textarea>
 
@@ -2273,3 +2312,6 @@ window.generatePdfReport = generatePdfReport;
 window.resetAllData = resetAllData;
 window.selectVerifCheck = selectVerifCheck;
 window.runVerification = runVerification;
+window.copyCheckCommand = copyCheckCommand;
+window.copyRemediation = copyRemediation;
+window.copyReportRemediation = copyReportRemediation;
