@@ -204,6 +204,29 @@ class SecurityAnalyzer {
     return null;
   }
 
+  // Detect general PowerShell runtime issues (elevation, missing cmdlets)
+  static detectPowerShellError(raw) {
+    if (!raw) return null;
+    const text = String(raw).trim();
+    if (/PermissionDenied|Access denied|Access is denied|HRESULT 0x80041003|UnauthorizedAccessException/i.test(text)) {
+      return {
+        type: "access_denied",
+        title: "Administrator Elevation Required (Access Denied)",
+        message: "PowerShell returned <code>Access denied / PermissionDenied (HRESULT 0x80041003)</code>. This check inspects core operating system security components which require an elevated Administrator session.",
+        fix: "Press <strong>Win + X</strong> on your keyboard &rarr; Click <strong>Terminal (Admin)</strong> or <strong>Windows PowerShell (Admin)</strong> &rarr; Run the command again and paste the output."
+      };
+    }
+    if (/not recognized as the name of a cmdlet|is not recognized as an internal or external command/i.test(text)) {
+      return {
+        type: "cmdlet_missing",
+        title: "Command or Module Not Available",
+        message: "PowerShell reported that the cmdlet is not recognized on this system.",
+        fix: "Check that you copied the complete command line accurately, or verify if the command is supported on your Windows edition."
+      };
+    }
+    return null;
+  }
+
   // 1. Windows Firewall Analysis
   static analyzeFirewall(raw) {
     const text = this.sanitize(raw);
@@ -212,9 +235,27 @@ class SecurityAnalyzer {
     // Check if contains profile keywords or Enabled status
     const hasProfileKeywords = /firewall|profile|domain|private|public/i.test(text);
     const hasEnabledKeyword = /enabled\s*[:=]/i.test(text);
+    const isAccessDenied = /PermissionDenied|Access denied|Access is denied|HRESULT 0x80041003/i.test(text);
 
-    if (!hasProfileKeywords && !hasEnabledKeyword) {
+    if (!hasProfileKeywords && !hasEnabledKeyword && !isAccessDenied) {
       return null;
+    }
+
+    if (isAccessDenied) {
+      return {
+        checkId: "firewall",
+        status: "warning",
+        score: 0,
+        maxScore: 20,
+        severity: "Medium",
+        cvss: "5.0 (Medium)",
+        finding: "Windows Firewall status unverified — Administrator privileges required",
+        whatWeFound: "PowerShell returned an Access Denied error when inspecting Windows Firewall profiles.",
+        whyItMatters: "Firewall rules inspect and protect incoming network traffic. Administrator permissions are needed to read firewall status.",
+        recommendedAction: "Open PowerShell as Administrator (Win + X > Terminal (Admin)) and re-run: Get-NetFirewallProfile",
+        remediationCmd: "Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True",
+        evidence: text.slice(0, 150)
+      };
     }
 
     // Split profiles or examine lines
@@ -327,16 +368,43 @@ class SecurityAnalyzer {
     const text = this.sanitize(raw);
     if (!text || text.length < 10) return null;
 
-    if (!/bitlocker|volume|mountpoint|protection|encrypted|encryption|keyprotector/i.test(text)) {
+    const hasBitLockerKeywords = /bitlocker|volume|mountpoint|protection|encrypted|encryption|keyprotector|ciminstance|0x80041003|win32encryptablevolume/i.test(text);
+    if (!hasBitLockerKeywords) {
       return null;
     }
 
     const lines = text.split(/\r?\n/);
     const evidenceLines = lines.filter(l => 
-      /C:|Protection|VolumeStatus|FullyEncrypted|FullyDecrypted|EncryptionMethod|On|Off/i.test(l)
+      /C:|Protection|VolumeStatus|FullyEncrypted|FullyDecrypted|EncryptionMethod|On|Off|Access denied|PermissionDenied|0x80041003|associated BitLocker volume/i.test(l)
     ).slice(0, 4).join("\n");
 
     const evidence = evidenceLines || (text.slice(0, 160) + "...");
+
+    // 1. Detect Permission Denied / Access Denied / Windows Home Edition
+    const isAccessDenied = /PermissionDenied|Access denied|Access is denied|HRESULT 0x80041003|UnauthorizedAccess/i.test(text);
+    const isNoAssociatedVolume = /does not have an associated BitLocker volume|not available on this edition|Win32EncryptableVolumeInternal/i.test(text);
+
+    if (isAccessDenied || isNoAssociatedVolume) {
+      const errEvidence = lines.filter(l => /Access denied|PermissionDenied|0x80041003|does not have an associated|Error/i.test(l)).slice(0, 3).join("\n") || lines.slice(0, 3).join("\n");
+      return {
+        checkId: "bitlocker",
+        status: "warning",
+        score: 0,
+        maxScore: 20,
+        severity: "High",
+        cvss: "7.0 (High)",
+        finding: isAccessDenied
+          ? "BitLocker status blocked — Administrator privileges required or Windows Home edition"
+          : "BitLocker volume not associated — Windows Home edition or drive unencrypted",
+        whatWeFound: isAccessDenied
+          ? "PowerShell reported 'Access Denied' (PermissionDenied / HRESULT 0x80041003) when querying BitLocker WMI encryption providers. Querying volume encryption status requires an elevated Administrator PowerShell session. Note: If your PC runs Windows Home edition, standard BitLocker cmdlets are restricted because Windows Home uses basic Device Encryption instead."
+          : "PowerShell reported that no BitLocker volume was associated with this system. This typically occurs on Windows Home edition (which uses Device Encryption instead of BitLocker) or when drive encryption is inactive.",
+        whyItMatters: "Without verified active disk encryption, files stored on your hard drive are unprotected at rest and can be extracted if your laptop or PC is lost, stolen, or physically inspected without needing your Windows login credentials.",
+        recommendedAction: "1. Run PowerShell as Administrator: Press Win + X, select 'Terminal (Admin)' or 'Windows PowerShell (Admin)', and re-run: Get-BitLockerVolume\n2. Windows Home Users: Open Windows Settings > Privacy & Security > Device Encryption to enable Device Encryption.\n3. Alternative Check: In an Administrator prompt, run 'manage-bde -status C:' to inspect volume encryption.",
+        remediationCmd: "manage-bde -status C:",
+        evidence: errEvidence || evidence
+      };
+    }
 
     // Check for explicit ProtectionStatus Off / FullyDecrypted
     const isDecrypted = /FullyDecrypted/i.test(text);
@@ -408,8 +476,27 @@ class SecurityAnalyzer {
     const text = this.sanitize(raw);
     if (!text || text.length < 10) return null;
 
-    if (!/localgroupmember|administrators|objectclass|principalsource|user|group/i.test(text)) {
+    const isAccessDenied = /PermissionDenied|Access denied|Access is denied|HRESULT 0x80041003/i.test(text);
+
+    if (!/localgroupmember|administrators|objectclass|principalsource|user|group/i.test(text) && !isAccessDenied) {
       return null;
+    }
+
+    if (isAccessDenied) {
+      return {
+        checkId: "admin",
+        status: "warning",
+        score: 8,
+        maxScore: 15,
+        severity: "Medium",
+        cvss: "5.0 (Medium)",
+        finding: "Administrator group query restricted — Administrator rights required",
+        whatWeFound: "PowerShell returned an Access Denied error when querying local Administrator group members.",
+        whyItMatters: "Auditing user accounts with administrator privileges requires administrative access.",
+        recommendedAction: "Open PowerShell as Administrator (Win + X > Terminal (Admin)) and re-run: Get-LocalGroupMember -Group 'Administrators'",
+        remediationCmd: null,
+        evidence: text.slice(0, 150)
+      };
     }
 
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
@@ -473,8 +560,27 @@ class SecurityAnalyzer {
     const text = this.sanitize(raw);
     if (!text || text.length < 5) return null;
 
-    if (!/guest|localuser|user account/i.test(text)) {
+    const isAccessDenied = /PermissionDenied|Access denied|Access is denied|HRESULT 0x80041003/i.test(text);
+
+    if (!/guest|localuser|user account/i.test(text) && !isAccessDenied) {
       return null;
+    }
+
+    if (isAccessDenied) {
+      return {
+        checkId: "guest",
+        status: "warning",
+        score: 8,
+        maxScore: 15,
+        severity: "Medium",
+        cvss: "5.0 (Medium)",
+        finding: "Guest account query restricted — Administrator rights required",
+        whatWeFound: "PowerShell returned an Access Denied error when querying the local Guest user account status.",
+        whyItMatters: "Verifying that the built-in Guest account is disabled requires administrative permissions.",
+        recommendedAction: "Open PowerShell as Administrator (Win + X > Terminal (Admin)) and re-run: Get-LocalUser -Name 'Guest'",
+        remediationCmd: "Disable-LocalUser -Name 'Guest'",
+        evidence: text.slice(0, 150)
+      };
     }
 
     const lines = text.split(/\r?\n/);
@@ -533,12 +639,49 @@ class SecurityAnalyzer {
     if (!text || text.length < 5) return null;
 
     const hasUpdateKeywords = /update|kb\d+|quickfixengineering|hotfix|installedon|pending|computername/i.test(text);
-    if (!hasUpdateKeywords) {
+    const isNotRecognized = /not recognized as the name of a cmdlet|is not recognized as an internal or external command/i.test(text);
+    const isAccessDenied = /PermissionDenied|Access denied|Access is denied/i.test(text);
+
+    if (!hasUpdateKeywords && !isNotRecognized && !isAccessDenied) {
       return null;
     }
 
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
     const evidence = lines.slice(0, 4).join("\n");
+
+    if (isNotRecognized) {
+      return {
+        checkId: "updates",
+        status: "warning",
+        score: 10,
+        maxScore: 15,
+        severity: "Low",
+        cvss: "3.0 (Low)",
+        finding: "PSWindowsUpdate module not pre-installed — Check Settings or Get-HotFix",
+        whatWeFound: "PowerShell reported that 'Get-WindowsUpdate' is not recognized. This command relies on the optional PSWindowsUpdate module which is not bundled with standard Windows by default.",
+        whyItMatters: "Without the module or checking Settings, recent update patch levels cannot be directly queried through this specific cmdlet.",
+        recommendedAction: "1. Check Windows Updates directly in Windows Settings > Windows Update > 'Check for updates'.\n2. Or install the module in Administrator PowerShell: Install-Module -Name PSWindowsUpdate -Force\n3. Or run the built-in Windows hotfix command: Get-HotFix",
+        remediationCmd: "Get-HotFix",
+        evidence: evidence
+      };
+    }
+
+    if (isAccessDenied) {
+      return {
+        checkId: "updates",
+        status: "warning",
+        score: 8,
+        maxScore: 15,
+        severity: "Medium",
+        cvss: "5.0 (Medium)",
+        finding: "Windows Update query restricted — Administrator rights required",
+        whatWeFound: "PowerShell returned an Access Denied error when querying update status.",
+        whyItMatters: "Verifying system update status requires administrative permissions.",
+        recommendedAction: "Open PowerShell as Administrator (Win + X > Terminal (Admin)) and re-run update checks.",
+        remediationCmd: "Get-HotFix",
+        evidence: evidence
+      };
+    }
 
     const hasPendingUpdates = /pending|available|not installed|downloading|restart required/i.test(text);
     const isUpToDate = /0 (pending|updates found)|up to date|installed|no updates/i.test(text);
@@ -1052,14 +1195,28 @@ function analyzeCurrentCheck(checkId) {
 
   if (!analysis) {
     if (parseError) {
+      const errDetails = SecurityAnalyzer.detectPowerShellError(rawText);
       parseError.style.display = "flex";
-      parseError.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-        <div>
-          <strong>Unable to confidently analyze this output.</strong><br>
-          Please make sure you copied the complete PowerShell result. Check that you ran the exact command as Administrator and that the command produced text.
-        </div>
-      `;
+      if (errDetails) {
+        parseError.innerHTML = `
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          <div>
+            <strong style="color: #ef4444; font-size: 1rem;">${errDetails.title}</strong><br>
+            <span style="font-size: 0.9rem; line-height: 1.5;">${errDetails.message}</span>
+            <div style="margin-top: 8px; font-size: 0.85rem; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+              <strong>How to fix:</strong> ${errDetails.fix}
+            </div>
+          </div>
+        `;
+      } else {
+        parseError.innerHTML = `
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          <div>
+            <strong>Unable to confidently analyze this output.</strong><br>
+            Please make sure you copied the complete PowerShell result. Check that you ran the exact command as Administrator and that the command produced text.
+          </div>
+        `;
+      }
     }
     return;
   }
