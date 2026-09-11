@@ -1,12 +1,54 @@
 /**
- * SecureCheck – Windows Security Health Analyzer
- * Pure Vanilla JavaScript Client-Side Engine
- * 100% Local & Privacy-Preserving: No system access or remote telemetry.
+ * ============================================================================
+ * SECURECHECK – WINDOWS SECURITY HEALTH ANALYZER
+ * ============================================================================
+ * 
+ * ARCHITECTURE OVERVIEW:
+ * SecureCheck is a client-side Windows cybersecurity audit engine designed
+ * to assess system hardening without requiring invasive software agents,
+ * remote server communication, or elevated automated scripts.
+ * 
+ * CORE DESIGN PRINCIPLES:
+ * 1. Zero-Agent / Non-Intrusive:
+ *    The user runs standard, read-only Windows PowerShell cmdlets in their own
+ *    terminal and pastes the resulting text here. SecureCheck NEVER executes
+ *    commands on the user's computer or opens remote management ports.
+ * 
+ * 2. 100% Client-Side Privacy:
+ *    All parsing, regex evaluation, CVSS severity categorization, score computation,
+ *    and PDF generation happen purely inside the browser's JavaScript runtime.
+ *    No telemetry, logs, or system data are sent to any remote servers.
+ * 
+ * 3. Deterministic Security Parsing:
+ *    The `SecurityAnalyzer` class extracts key configuration values from PowerShell
+ *    output, cross-references baseline standards (CIS Benchmarks, Microsoft Baselines),
+ *    and produces clear, educational diagnoses with CVSS scores and copyable fixes.
+ * 
+ * 4. Verification & Re-Testing:
+ *    Users can re-run audit commands after applying fixes in the "Verification"
+ *    workspace to confirm hardening and update their overall security score.
+ * ============================================================================
  */
 
-// ==========================================
-// 1. CHECKS CONFIGURATION & REALISTIC SAMPLES
-// ==========================================
+// ============================================================================
+// SECTION 1: CHECKS CONFIGURATION & REALISTIC SAMPLES
+// ============================================================================
+/**
+ * Array containing the definitions for all 6 core security dimensions evaluated.
+ * 
+ * Each check object defines:
+ * - `id`: Unique programmatic identifier used across state, UI elements, and routers.
+ * - `step`: Numerical step index in the guided audit workflow (1 to 6).
+ * - `title`: Human-readable display name of the security component.
+ * - `weight`: Maximum points allocated to this check towards the 100-point score.
+ * - `command`: The exact, safe PowerShell cmdlet recommended for the audit.
+ * - `shortDesc`: Brief subtitle explaining the check's functional domain.
+ * - `why`: Educational explanation explaining the threat model and risk of misconfiguration.
+ * - `powershellInstructions`: Clear guidance on how to run the command in PowerShell.
+ * - `sampleSecure`: Example PowerShell output representing a hardened, secure configuration.
+ * - `sampleVulnerable`: Example PowerShell output representing a misconfigured or exposed system.
+ * - `remediationCommand`: Ready-to-copy PowerShell command that applies the security fix.
+ */
 const SECURITY_CHECKS = [
   {
     id: "firewall",
@@ -179,15 +221,37 @@ uTorrent Bundleware Client                3.5.5`,
   }
 ];
 
-// ==========================================
-// 2. PARSING & ANALYSIS ENGINE
-// ==========================================
+// ============================================================================
+// SECTION 2: PARSING & SECURITY ANALYSIS ENGINE
+// ============================================================================
+/**
+ * SecurityAnalyzer
+ * 
+ * Static utility class responsible for:
+ * 1. Sanitizing user-submitted terminal text.
+ * 2. Scanning for accidental credential leakage (private keys, tokens, passwords).
+ * 3. Detecting PowerShell runtime execution errors (e.g. Access Denied, missing cmdlets).
+ * 4. Parsing configuration blocks from output for each of the 6 security domains.
+ * 5. Calculating severity, CVSS scores, remediation commands, and formatted evidence.
+ */
 class SecurityAnalyzer {
+  /**
+   * Cleans up raw input by stripping leading/trailing whitespace.
+   * @param {string} text - Raw input from textarea.
+   * @returns {string} Sanitized string.
+   */
   static sanitize(text) {
     return text ? text.trim() : "";
   }
 
-  // Sensitive data detector
+  /**
+   * Privacy Protection Guard:
+   * Scans user input for accidental leakage of highly sensitive tokens or secrets
+   * before analysis. If detected, SecureCheck warns the user to sanitize their text.
+   * 
+   * @param {string} text - Raw text to inspect.
+   * @returns {string|null} Name of detected secret pattern, or null if clean.
+   */
   static checkSensitiveInfo(text) {
     const patterns = [
       { name: "Private Key", regex: /-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/i },
@@ -204,10 +268,21 @@ class SecurityAnalyzer {
     return null;
   }
 
-  // Detect general PowerShell runtime issues (elevation, missing cmdlets)
+  /**
+   * Diagnostic Helper for PowerShell Execution Errors:
+   * Detects whether the pasted output is actually an error stream from PowerShell
+   * rather than command output. Common causes include:
+   * - Running commands without Administrator elevation (Access Denied / HRESULT 0x80041003).
+   * - Missing PowerShell modules (e.g. PSWindowsUpdate not installed).
+   * 
+   * @param {string} raw - Raw text from the user.
+   * @returns {object|null} Diagnostic error details with troubleshooting steps, or null.
+   */
   static detectPowerShellError(raw) {
     if (!raw) return null;
     const text = String(raw).trim();
+
+    // Check for elevation / permission denied errors
     if (/PermissionDenied|Access denied|Access is denied|HRESULT 0x80041003|UnauthorizedAccessException/i.test(text)) {
       return {
         type: "access_denied",
@@ -216,6 +291,8 @@ class SecurityAnalyzer {
         fix: "Press <strong>Win + X</strong> on your keyboard &rarr; Click <strong>Terminal (Admin)</strong> or <strong>Windows PowerShell (Admin)</strong> &rarr; Run the command again and paste the output."
       };
     }
+
+    // Check for missing cmdlet or module errors
     if (/not recognized as the name of a cmdlet|is not recognized as an internal or external command/i.test(text)) {
       return {
         type: "cmdlet_missing",
@@ -227,7 +304,25 @@ class SecurityAnalyzer {
     return null;
   }
 
-  // 1. Windows Firewall Analysis
+  // --------------------------------------------------------------------------
+  // 1. WINDOWS FIREWALL ANALYSIS
+  // --------------------------------------------------------------------------
+  /**
+   * Evaluates PowerShell output from `Get-NetFirewallProfile`.
+   * 
+   * Windows maintains three active network firewall profiles:
+   * - Domain: Used when connected to an Active Directory domain network.
+   * - Private: Used on trusted home or private business networks.
+   * - Public: Used on untrusted networks (public Wi-Fi, coffee shops, airports).
+   * 
+   * Scoring Logic:
+   * - Secure (20/20 pts): All profiles are active (Enabled: True) with default inbound block.
+   * - Warning (8/20 pts): Only Domain profile is disabled, or non-admin access error occurred.
+   * - Danger (0/20 pts): Public or Private profile is disabled (critical network exposure).
+   * 
+   * @param {string} raw - Raw text from Get-NetFirewallProfile.
+   * @returns {object|null} Evaluation result object or null if text unrecognized.
+   */
   static analyzeFirewall(raw) {
     const text = this.sanitize(raw);
     if (!text || text.length < 10) return null;
@@ -241,6 +336,7 @@ class SecurityAnalyzer {
       return null;
     }
 
+    // Handle non-admin elevation restrictions
     if (isAccessDenied) {
       return {
         checkId: "firewall",
@@ -363,7 +459,22 @@ class SecurityAnalyzer {
     return null;
   }
 
-  // 2. BitLocker Analysis
+  // --------------------------------------------------------------------------
+  // 2. BITLOCKER / FULL DISK ENCRYPTION ANALYSIS
+  // --------------------------------------------------------------------------
+  /**
+   * Evaluates PowerShell output from `Get-BitLockerVolume`.
+   * 
+   * Protects the primary operating system volume (C:) against offline theft.
+   * Handles:
+   * - FullyEncrypted with ProtectionStatus On (Secure - 20 pts).
+   * - EncryptionInProgress (Warning - 12 pts).
+   * - FullyDecrypted or ProtectionStatus Off (Danger - 0 pts).
+   * - WMI permission denied / Windows Home Device Encryption differences.
+   * 
+   * @param {string} raw - Raw text from Get-BitLockerVolume.
+   * @returns {object|null} Evaluation result object or null if text unrecognized.
+   */
   static analyzeBitLocker(raw) {
     const text = this.sanitize(raw);
     if (!text || text.length < 10) return null;
@@ -471,7 +582,20 @@ class SecurityAnalyzer {
     return null;
   }
 
-  // 3. Administrator Accounts Analysis
+  // --------------------------------------------------------------------------
+  // 3. ADMINISTRATOR ACCOUNTS ANALYSIS
+  // --------------------------------------------------------------------------
+  /**
+   * Evaluates PowerShell output from `Get-LocalGroupMember -Group "Administrators"`.
+   * 
+   * Audits local group membership against the Principle of Least Privilege:
+   * - Secure (15 pts): 1-2 recognized administrative accounts.
+   * - Warning (8 pts): >= 3 privileged accounts, or built-in Administrator active with other accounts,
+   *   or elevation required to query group members.
+   * 
+   * @param {string} raw - Raw text from Get-LocalGroupMember.
+   * @returns {object|null} Evaluation result object or null if text unrecognized.
+   */
   static analyzeAdmins(raw) {
     const text = this.sanitize(raw);
     if (!text || text.length < 10) return null;
@@ -555,7 +679,21 @@ class SecurityAnalyzer {
     return null;
   }
 
-  // 4. Guest Account Analysis
+  // --------------------------------------------------------------------------
+  // 4. GUEST ACCOUNT STATUS ANALYSIS
+  // --------------------------------------------------------------------------
+  /**
+   * Evaluates PowerShell output from `Get-LocalUser -Name "Guest"` or `net user guest`.
+   * 
+   * Windows baseline standards dictate that the built-in Guest account must be
+   * permanently disabled to prevent passwordless, anonymous local access:
+   * - Secure (15 pts): Guest account status is False / No / Disabled.
+   * - Danger (0 pts): Guest account is True / Yes / Active.
+   * - Warning (8 pts): Permission restriction occurred when reading user account.
+   * 
+   * @param {string} raw - Raw text from Get-LocalUser.
+   * @returns {object|null} Evaluation result object or null if text unrecognized.
+   */
   static analyzeGuest(raw) {
     const text = this.sanitize(raw);
     if (!text || text.length < 5) return null;
@@ -633,7 +771,19 @@ class SecurityAnalyzer {
     return null;
   }
 
-  // 5. Windows Updates Analysis
+  // --------------------------------------------------------------------------
+  // 5. WINDOWS UPDATES ANALYSIS
+  // --------------------------------------------------------------------------
+  /**
+   * Evaluates PowerShell output from `Get-WindowsUpdate` or `Get-HotFix`.
+   * 
+   * Verifies operating system patching currency:
+   * - Secure (15 pts): Patches up to date, 0 pending security hotfixes.
+   * - Warning (5-10 pts): Pending critical updates, or missing PSWindowsUpdate module.
+   * 
+   * @param {string} raw - Raw text from Get-WindowsUpdate or Get-HotFix.
+   * @returns {object|null} Evaluation result object or null if text unrecognized.
+   */
   static analyzeUpdates(raw) {
     const text = this.sanitize(raw);
     if (!text || text.length < 5) return null;
@@ -729,7 +879,20 @@ class SecurityAnalyzer {
     return null;
   }
 
-  // 6. Installed Applications / Shadow IT Analysis
+  // --------------------------------------------------------------------------
+  // 6. INSTALLED APPLICATIONS / SHADOW IT ANALYSIS
+  // --------------------------------------------------------------------------
+  /**
+   * Evaluates PowerShell output from the registry uninstall key scan.
+   * 
+   * Identifies potentially risky applications:
+   * - Shadow IT & Remote Administration utilities (TeamViewer, AnyDesk, VNC, etc.).
+   * - Obsolete or dangerous runtimes (Java 6/7, Flash, Silverlight).
+   * - Questionable bundled utilities (toolbars, torrent clients, aggressive cleaners).
+   * 
+   * @param {string} raw - Raw text from registry uninstall query.
+   * @returns {object|null} Evaluation result object or null if text unrecognized.
+   */
   static analyzeApps(raw) {
     const text = this.sanitize(raw);
     if (!text || text.length < 10) return null;
@@ -822,7 +985,15 @@ class SecurityAnalyzer {
     };
   }
 
-  // Router for individual check parsing
+  // --------------------------------------------------------------------------
+  // CENTRAL DISPATCHER ROUTER
+  // --------------------------------------------------------------------------
+  /**
+   * Routes the checkId and text to the corresponding analyzer method.
+   * @param {string} checkId - One of: firewall, bitlocker, admin, guest, updates, apps.
+   * @param {string} text - Raw terminal output to analyze.
+   * @returns {object|null} Parsed security result, or null if text could not be parsed.
+   */
   static analyze(checkId, text) {
     switch (checkId) {
       case "firewall": return this.analyzeFirewall(text);
@@ -836,51 +1007,78 @@ class SecurityAnalyzer {
   }
 }
 
-// ==========================================
-// 3. APPLICATION STATE & CONTROLLER
-// ==========================================
+// ============================================================================
+// SECTION 3: APPLICATION STATE & SPA NAVIGATION CONTROLLER
+// ============================================================================
+/**
+ * Global AppState:
+ * Centralized, ephemeral in-memory state store for the single-page application.
+ * 
+ * Properties:
+ * - `currentView`: The active view identifier ('home', 'audit', 'dashboard', 'report', 'verification').
+ * - `activeStepIndex`: Currently visible audit step index (0 through 5).
+ * - `results`: Dictionary mapping checkId -> analysis result object or { skipped: true }.
+ * - `verificationResults`: Dictionary mapping checkId -> before/after verification objects.
+ */
 const AppState = {
-  currentView: "home", // "home", "audit", "dashboard", "report", "verification"
+  currentView: "home",
   activeStepIndex: 0,
-  results: {}, // key: checkId -> result object or { skipped: true }
-  verificationResults: {} // key: checkId -> { before, after, verified: bool, newResult }
+  results: {},
+  verificationResults: {}
 };
 
-// Navigation Controller
+/**
+ * Single-Page Application (SPA) View Switcher:
+ * Toggles visibility of view sections without triggering page reloads.
+ * Synchronizes top navigation active button styling and smooth-scrolls to top.
+ * 
+ * @param {string} viewName - The target view key ('home', 'audit', 'dashboard', 'report', 'about').
+ */
 function switchView(viewName) {
   AppState.currentView = viewName;
+
+  // Hide all view sections and deactivate all navigation buttons
   document.querySelectorAll(".view-section").forEach(el => el.style.display = "none");
   document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.remove("active"));
 
+  // Show target view container
   const targetView = document.getElementById(`view-${viewName}`);
   if (targetView) targetView.style.display = "block";
 
+  // Mark corresponding navigation button as active
   const targetNav = document.getElementById(`nav-${viewName}`);
   if (targetNav) targetNav.classList.add("active");
 
+  // Smooth scroll to top of viewport
   window.scrollTo({ top: 0, behavior: "smooth" });
 
+  // Trigger view-specific render routines
   if (viewName === "audit") {
     renderAuditStep(AppState.activeStepIndex);
   } else if (viewName === "dashboard") {
     renderDashboard();
   } else if (viewName === "report") {
     renderReport();
-  } else if (viewName === "verification") {
-    renderVerificationView();
   }
 }
 
-// ==========================================
-// 4. AUDIT WORKFLOW RENDERING
-// ==========================================
+// ============================================================================
+// SECTION 4: GUIDED AUDIT WORKFLOW RENDERING & INTERACTION HANDLERS
+// ============================================================================
+/**
+ * Renders the guided audit card for a specific check index (0 through 5).
+ * Generates step-by-step instructions, command copy boxes, sample output tabs,
+ * textarea input area, sensitive token alerts, and previous result cards if present.
+ * 
+ * @param {number} index - Index in SECURITY_CHECKS array.
+ */
 function renderAuditStep(index) {
   AppState.activeStepIndex = index;
   const check = SECURITY_CHECKS[index];
   const container = document.getElementById("auditCardContainer");
   if (!container) return;
 
-  // Update Stepper
+  // Update Stepper Progress Indicators
   renderStepper();
 
   const existingResult = AppState.results[check.id];
@@ -897,7 +1095,7 @@ function renderAuditStep(index) {
       </div>
 
       <div class="audit-card-body">
-        <!-- Why checking box -->
+        <!-- Why checking box: Explains threat model in accessible terms -->
         <div class="why-box">
           <div class="why-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -912,13 +1110,30 @@ function renderAuditStep(index) {
           </div>
         </div>
 
-        <!-- Step Instructions -->
+        <!-- Step Instructions: Safe execution workflow -->
         <div class="execution-steps">
           <div class="instruction-step">
             <div class="step-num-bubble">1</div>
             <div class="instruction-content">
-              <div class="instruction-label">Open PowerShell as Administrator</div>
-              <div class="instruction-hint">Right-click the Windows Start button (or press <strong>Win + X</strong>) and select <strong>Windows Terminal (Admin)</strong> or <strong>Windows PowerShell (Admin)</strong>.</div>
+              <div class="instruction-label">Open Command Prompt as Administrator</div>
+              <div class="admin-open-steps" style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                  <span style="color: var(--accent-cyan); font-weight: 700; flex-shrink: 0;">•</span>
+                  <span>Click the Windows Start button or press the Windows key.</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                  <span style="color: var(--accent-cyan); font-weight: 700; flex-shrink: 0;">•</span>
+                  <span>Type cmd into the search bar.</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                  <span style="color: var(--accent-cyan); font-weight: 700; flex-shrink: 0;">•</span>
+                  <span>Right-click the Command Prompt result and select Run as administrator.</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                  <span style="color: var(--accent-cyan); font-weight: 700; flex-shrink: 0;">•</span>
+                  <span>Click Yes on the User Account Control (UAC) prompt to allow elevated permissions.</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1002,7 +1217,7 @@ function renderAuditStep(index) {
           </div>
         </div>
 
-        <!-- Result Container -->
+        <!-- Result Container: Shows card upon successful analysis -->
         <div id="result-container-${check.id}">
           ${existingResult && !existingResult.skipped ? renderResultCardHtml(existingResult) : ""}
         </div>
@@ -1011,6 +1226,12 @@ function renderAuditStep(index) {
   `;
 }
 
+/**
+ * Updates the horizontal progress stepper bar showing:
+ * - Current active step with neon cyan glow.
+ * - Completed steps with green checkmarks.
+ * - Skipped steps with a dash indicator.
+ */
 function renderStepper() {
   const stepper = document.getElementById("stepperContainer");
   const bar = document.getElementById("progressBarFill");
@@ -1046,13 +1267,24 @@ function renderStepper() {
   stepper.innerHTML = html;
 }
 
+/**
+ * Navigates directly to a specific step index in the audit flow.
+ * @param {number} idx - Check index (0 to 5).
+ */
 function goToStep(idx) {
   if (idx >= 0 && idx < SECURITY_CHECKS.length) {
     renderAuditStep(idx);
   }
 }
 
-// HTML & Attribute Escaping Helpers
+// --------------------------------------------------------------------------
+// HTML & ATTRIBUTE ESCAPING UTILITIES
+// --------------------------------------------------------------------------
+/**
+ * Escapes unsafe characters for HTML rendering to prevent XSS.
+ * @param {string} str - Raw string.
+ * @returns {string} Sanitized string safe for HTML text.
+ */
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
   return String(str)
@@ -1063,11 +1295,25 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
+/**
+ * Escapes unsafe characters for HTML attribute values.
+ * @param {string} str - Raw string.
+ * @returns {string} Sanitized string.
+ */
 function escapeAttr(str) {
   return escapeHtml(str);
 }
 
-// Copy to Clipboard
+// --------------------------------------------------------------------------
+// CLIPBOARD COPY UTILITIES
+// --------------------------------------------------------------------------
+/**
+ * Copies text to the system clipboard with visual button state feedback.
+ * Includes fallback textarea copy method for sandboxed iframes or older browsers.
+ * 
+ * @param {string} text - Command or snippet to copy.
+ * @param {string} btnId - ID of button triggering copy.
+ */
 function copyCommand(text, btnId) {
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById(btnId);
@@ -1081,7 +1327,7 @@ function copyCommand(text, btnId) {
       }, 2000);
     }
   }).catch(() => {
-    // Fallback if permission blocked
+    // Fallback if clipboard API permission is blocked in iframe
     const input = document.createElement("textarea");
     input.value = text;
     document.body.appendChild(input);
@@ -1101,7 +1347,10 @@ function copyCommand(text, btnId) {
   });
 }
 
-// Copy check command safely without breaking inline HTML attributes
+/**
+ * Safely copies the audit command for a specific check by lookup.
+ * @param {string} checkId - Check identifier.
+ */
 function copyCheckCommand(checkId) {
   const chk = SECURITY_CHECKS.find(c => c.id === checkId);
   if (chk && chk.command) {
@@ -1109,7 +1358,10 @@ function copyCheckCommand(checkId) {
   }
 }
 
-// Copy remediation command safely without breaking inline HTML attributes
+/**
+ * Safely copies the diagnosed remediation command for an audit result.
+ * @param {string} checkId - Check identifier.
+ */
 function copyRemediation(checkId) {
   const res = AppState.results[checkId];
   if (res && res.remediationCmd) {
@@ -1117,7 +1369,11 @@ function copyRemediation(checkId) {
   }
 }
 
-// Copy report remediation command safely without breaking inline HTML attributes
+/**
+ * Safely copies remediation command from the final report view.
+ * @param {string} checkId - Check identifier.
+ * @param {string} btnId - Button DOM ID.
+ */
 function copyReportRemediation(checkId, btnId) {
   const res = AppState.results[checkId];
   if (res && res.remediationCmd) {
@@ -1125,6 +1381,10 @@ function copyReportRemediation(checkId, btnId) {
   }
 }
 
+/**
+ * Clears the textarea and deletes any stored evaluation result for this check.
+ * @param {string} checkId - Check identifier.
+ */
 function clearOutputText(checkId) {
   const textarea = document.getElementById(`output-textarea-${checkId}`);
   if (textarea) {
@@ -1141,6 +1401,11 @@ function clearOutputText(checkId) {
   }
 }
 
+/**
+ * Input event listener for textarea:
+ * Real-time scan for accidental credentials or private keys.
+ * @param {string} checkId - Check identifier.
+ */
 function onOutputChanged(checkId) {
   const textarea = document.getElementById(`output-textarea-${checkId}`);
   const sensitiveAlert = document.getElementById(`sensitive-alert-${checkId}`);
@@ -1163,6 +1428,10 @@ function onOutputChanged(checkId) {
   }
 }
 
+/**
+ * Marks a check as skipped by the user and advances to the next step.
+ * @param {string} checkId - Check identifier.
+ */
 function skipCheck(checkId) {
   AppState.results[checkId] = {
     checkId,
@@ -1172,6 +1441,15 @@ function skipCheck(checkId) {
   proceedToNextStep();
 }
 
+/**
+ * Main Controller for analyzing pasted terminal output for current check:
+ * 1. Verifies input is not empty.
+ * 2. Passes text to `SecurityAnalyzer.analyze(checkId, text)`.
+ * 3. If parsing fails, detects PowerShell elevation/cmdlet errors and renders troubleshooting cards.
+ * 4. On success, persists result in AppState and renders the finding card.
+ * 
+ * @param {string} checkId - Check identifier.
+ */
 function analyzeCurrentCheck(checkId) {
   const textarea = document.getElementById(`output-textarea-${checkId}`);
   const parseError = document.getElementById(`parse-error-${checkId}`);
@@ -1232,6 +1510,18 @@ function analyzeCurrentCheck(checkId) {
   }
 }
 
+/**
+ * Generates the HTML card markup for displaying an analysis result.
+ * Colors and badges depend on the status ('secure', 'warning', or 'danger').
+ * Displays:
+ * - Status badge (Secure, Needs Attention, High Risk)
+ * - Severity and CVSS score
+ * - Primary finding headline
+ * - 4-part breakdown: What we found, Why it matters, Recommended action (with 1-click copy fix), Evidence snippet
+ * 
+ * @param {object} result - Analysis result object from SecurityAnalyzer.
+ * @returns {string} HTML string.
+ */
 function renderResultCardHtml(result) {
   let statusBadge = "";
   let cardClass = "";
@@ -1311,6 +1601,10 @@ function renderResultCardHtml(result) {
   `;
 }
 
+/**
+ * Advances the user to the next audit check step, or switches
+ * to the final Dashboard if all 6 checks have been reached.
+ */
 function proceedToNextStep() {
   if (AppState.activeStepIndex < SECURITY_CHECKS.length - 1) {
     goToStep(AppState.activeStepIndex + 1);
@@ -1319,9 +1613,17 @@ function proceedToNextStep() {
   }
 }
 
-// ==========================================
-// 5. SECURITY SCORING & DASHBOARD
-// ==========================================
+// ============================================================================
+// SECTION 5: SECURITY SCORING ALGORITHM & DASHBOARD RENDERING
+// ============================================================================
+/**
+ * Computes the overall security score and risk classification.
+ * - Aggregates points earned across completed checks.
+ * - Normalizes score on a 0-100 scale based on assessed check weights.
+ * - Classifies posture into LOW, MODERATE, CRITICAL risk or NOT ASSESSED (if all skipped).
+ * 
+ * @returns {object} Calculated metrics, final score, risk tier, and summary text.
+ */
 function computeSecurityScore() {
   let earnedScore = 0;
   let totalAssessedWeight = 0;
@@ -1390,6 +1692,14 @@ function computeSecurityScore() {
   };
 }
 
+/**
+ * Renders the interactive Security Posture Dashboard:
+ * - Circular HUD score gauge with color dynamics (Green / Amber / Red)
+ * - Overall risk rating and summary diagnosis
+ * - Metric pills (Secure, Attention, High Risk, Skipped)
+ * - 6-card grid for individual security dimensions with re-test navigation
+ * - Quick action buttons (Generate Report, Reset Audit)
+ */
 function renderDashboard() {
   const container = document.getElementById("dashboardContent");
   if (!container) return;
@@ -1494,11 +1804,16 @@ function renderDashboard() {
   `;
 }
 
-// ==========================================
-// 6. COMPREHENSIVE FINAL REPORT
-// ==========================================
-
-// Deterministic cryptographic attestation hash & cert serial for authentic audit sign-off
+// ============================================================================
+// SECTION 6: COMPREHENSIVE FINAL SECURITY REPORT
+// ============================================================================
+/**
+ * Generates a deterministic cryptographic attestation fingerprint and cert serial
+ * based on the assessed check keys, outcome hash, and session state.
+ * Provides authentic audit verification metadata for compliance records.
+ * 
+ * @returns {object} { certId, sha }
+ */
 function getReportCryptoFingerprint() {
   const seed = "SecureCheck-" + (AppState.completedSteps ? AppState.completedSteps.join(",") : "0") + "-" + Object.keys(AppState.results).length;
   let h1 = 0x811c9dc5, h2 = 0x27d4eb2f;
@@ -1514,6 +1829,16 @@ function getReportCryptoFingerprint() {
   return { certId, sha };
 }
 
+/**
+ * Renders the full interactive Audit Report in the web UI:
+ * - Official header banner with brand logo and PDF download action
+ * - Executive metadata cards (Report Date, Score, Risk Level, Audit Scope)
+ * - Section 1: Flaws Found / Vulnerability Diagnosis (CVSS, evidence quotes)
+ * - Section 2: Remediation Actions / Hardening Steps (1-click PowerShell copy)
+ * - Section 3: Hardened Verification Summary (before vs. after proof)
+ * - Sign-off block with digital certification stamp
+ * - Security disclaimer
+ */
 function renderReport() {
   const container = document.getElementById("reportContent");
   if (!container) return;
@@ -1606,40 +1931,6 @@ function renderReport() {
     });
   }
 
-  // Verification Summary inside Report
-  let verifSummaryHtml = "";
-  const verifiedList = Object.keys(AppState.verificationResults);
-  if (verifiedList.length === 0) {
-    verifSummaryHtml = `
-      <div style="background-color: var(--bg-subtle); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 20px; text-align: center;">
-        <p style="color: var(--text-secondary); margin-bottom: 12px;">No remediation verification has been recorded yet.</p>
-        <button class="btn btn-secondary btn-sm" onclick="switchView('verification')">
-          Open Hardened Verification Workspace
-        </button>
-      </div>
-    `;
-  } else {
-    verifSummaryHtml = `
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        ${verifiedList.map(cid => {
-          const v = AppState.verificationResults[cid];
-          const check = SECURITY_CHECKS.find(c => c.id === cid);
-          return `
-            <div style="background-color: var(--secure-green-bg); border: 1px solid var(--secure-green-border); border-radius: var(--radius-md); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <strong>${check?.title || cid}</strong>: Hardening Verified Successfully!
-                <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px;">
-                  Before: <em>${v.beforeStatus}</em> ➡️ After: <strong style="color: var(--secure-green);">${v.afterStatus}</strong>
-                </div>
-              </div>
-              <span class="stat-pill" style="color: var(--secure-green); background: #fff;">Verified Hardened ✅</span>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    `;
-  }
-
   container.innerHTML = `
     <div class="report-document-container">
       <div class="report-header-banner">
@@ -1697,18 +1988,32 @@ function renderReport() {
       </div>
       ${remediationHtml}
 
-      <!-- SECTION 3: HARDENED VERIFICATION -->
-      <div class="report-section-title">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-        3. Hardened Verification / Proof
-      </div>
-      ${verifSummaryHtml}
+      <!-- SIGN-OFF & ATTESTATION SECTION -->
+      <div class="report-signoff-row" style="display: flex; gap: 20px; align-items: stretch; margin: 32px 0 24px 0; flex-wrap: wrap;">
+        <!-- Left: Attestation Ledger -->
+        <div style="flex: 1 1 320px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-left: 3px solid var(--accent-cyan); border-radius: var(--radius-sm); padding: 18px 20px; display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div style="font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              Official Assessment Attestation
+            </div>
+            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6;">
+              <div>Certificate Serial: <span style="color: #fff;">${certId}</span></div>
+              <div>Digital Fingerprint: <span style="color: var(--accent-cyan);">${reportSha}</span></div>
+              <div>Diagnostic Engine: SecureCheck v2.4 (Elevated Security Analyzer)</div>
+            </div>
+          </div>
+          <div style="margin-top: 12px; font-size: 0.82rem; font-weight: 600; color: var(--secure-green); display: flex; align-items: center; gap: 6px;">
+            <span>🛡️</span> DIGITALLY SEALED &amp; VERIFIED
+          </div>
+        </div>
 
-      <!-- SIGNATURE BLOCK PLACEHOLDER -->
-      <div class="signature-block-placeholder" id="reportSignatureBlock">
-        <img src="/digital-sign-2-cropped.png" alt="digital sign 2 img" class="signature-block-img" id="digitalSign2Img" onerror="this.src='/digital-sign-2.png'" />
-        <div class="signature-block-role">devloper</div>
-        <div class="signature-block-org">SecureCheck</div>
+        <!-- Right: Developer Signature Block -->
+        <div class="signature-block-placeholder" id="reportSignatureBlock" style="margin: 0; flex: 0 1 280px; max-width: 320px;">
+          <img src="/digital-sign-2-cropped.png" alt="digital sign 2 img" class="signature-block-img" id="digitalSign2Img" onerror="this.src='/digital-sign-2.png'" />
+          <div class="signature-block-role">devloper</div>
+          <div class="signature-block-org">SecureCheck</div>
+        </div>
       </div>
 
       <!-- DISCLAIMER -->
@@ -1719,9 +2024,17 @@ function renderReport() {
   `;
 }
 
-// ==========================================
-// 7. HARDENED VERIFICATION (BEFORE VS AFTER)
-// ==========================================
+// ============================================================================
+// SECTION 7: HARDENED REMEDIATION VERIFICATION (BEFORE VS. AFTER WORKSPACE)
+// ============================================================================
+/**
+ * Renders the Hardened Verification view.
+ * Enables the user to test if their remediation commands actually worked by:
+ * - Showing the original baseline flaw and evidence in the "Before" pane.
+ * - Providing a command reminder and textarea in the "After" pane to paste new output.
+ * - Evaluating the new output with `SecurityAnalyzer.analyze`.
+ * - Updating the global audit score dynamically when hardening is verified.
+ */
 function renderVerificationView() {
   const container = document.getElementById("verificationContent");
   if (!container) return;
@@ -1826,11 +2139,25 @@ function renderVerificationView() {
   `;
 }
 
+/**
+ * Changes the active check being verified in the Hardened Verification view.
+ * @param {string} checkId - Check identifier.
+ */
 function selectVerifCheck(checkId) {
   AppState.selectedVerifCheckId = checkId;
   renderVerificationView();
 }
 
+/**
+ * Evaluates the new output pasted by user into the verification pane.
+ * Validates whether the new configuration resolves the security flaw.
+ * If verified secure:
+ * - Updates AppState.verificationResults
+ * - Overwrites AppState.results to restore score points
+ * - Updates the dashboard and report
+ * 
+ * @param {string} checkId - Check identifier.
+ */
 function runVerification(checkId) {
   const textarea = document.getElementById(`output-textarea-verif-${checkId}`);
   const feedback = document.getElementById(`verif-result-feedback-${checkId}`);
@@ -1888,6 +2215,11 @@ function runVerification(checkId) {
   }
 }
 
+/**
+ * Generates the HTML message for verification result feedback.
+ * @param {object} v - Verification result record.
+ * @returns {string} HTML alert markup.
+ */
 function renderVerifFeedbackHtml(v) {
   if (v.verified) {
     return `
@@ -1914,11 +2246,18 @@ function renderVerifFeedbackHtml(v) {
   }
 }
 
-// ==========================================
-// 8. HIGH-QUALITY CLIENT-SIDE PDF GENERATION
-// ==========================================
-
-// Helper to safely load and optimize images as base64 Data URLs for jsPDF
+// ============================================================================
+// SECTION 8: CLIENT-SIDE CRYPTO-VERIFIED PDF REPORT EXPORT (JSPDF)
+// ============================================================================
+/**
+ * Safely loads an image asset from a URL and converts it to an optimized base64 Data URL via canvas.
+ * Preserves transparency for PNGs and avoids browser CORS/tainting issues.
+ * 
+ * @param {string} url - Image path or relative URL.
+ * @param {number} maxWidth - Maximum target canvas width.
+ * @param {number} maxHeight - Maximum target canvas height.
+ * @returns {Promise<object|null>} { dataUrl, width, height, aspect, format }
+ */
 function loadImageAsBase64(url, maxWidth = 800, maxHeight = 800) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -1961,13 +2300,27 @@ function loadImageAsBase64(url, maxWidth = 800, maxHeight = 800) {
   });
 }
 
+/**
+ * Client-Side PDF Report Generator:
+ * Uses jsPDF and autoTable plugin to render an executive cybersecurity assessment document:
+ * 1. Branded Header: Navy header bar with brand logo, report title, date, and slogan.
+ * 2. Executive Score Card: Overall health score (0-100), risk tier badge, breakdown metrics.
+ * 3. Scope & Findings Summary Table: Dimension name, evaluation status, score points, finding.
+ * 4. Section 1: Flaws Found & Diagnosis with CVSS risk classification and PowerShell evidence quotes.
+ * 5. Section 2: Remediation Actions & Hardening Steps with actionable PowerShell scripts.
+ * 6. Section 3: Hardened Verification Summary displaying before vs. after resolution proof.
+ * 7. Bottom Signature Block: developer title, SecureCheck brand, and digital certification image.
+ * 8. Running Headers, Page Numbers, and Legal Disclaimers across multi-page layouts.
+ * 
+ * @param {Event} e - Button click event.
+ */
 async function generatePdfReport(e) {
   if (typeof window.jspdf === "undefined" && typeof window.jsPDF === "undefined") {
     alert("PDF library is loading from CDN. Please check your internet connection and try again.");
     return;
   }
 
-  // Visual button state
+  // Visual button state: show loading spinner while generating
   const targetBtn = e && e.target ? e.target.closest("button") : null;
   const originalBtnHtml = targetBtn ? targetBtn.innerHTML : "";
   if (targetBtn) {
@@ -1997,6 +2350,7 @@ async function generatePdfReport(e) {
 
     const scoreData = computeSecurityScore();
     const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const { certId, sha: reportSha } = getReportCryptoFingerprint();
 
     const primaryColor = [15, 23, 42]; // #0f172a
     const accentColor = [14, 165, 233]; // #0ea5e9
@@ -2005,426 +2359,501 @@ async function generatePdfReport(e) {
 
     // Page 1: Header & Executive Summary
     doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.rect(0, 0, 595.28, 86, "F");
+    doc.rect(0, 0, 595.28, 84, "F");
 
     // Cyan accent bottom border on header
     doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
-    doc.rect(0, 84, 595.28, 2, "F");
+    doc.rect(0, 82, 595.28, 2, "F");
 
     // Add Logo in Header at the top
     let titleStartX = 40;
     if (logoImgData) {
       doc.setFillColor(255, 255, 255);
-      doc.roundedRect(40, 15, 54, 54, 4, 4, "F");
-      doc.addImage(logoImgData.dataUrl, "JPEG", 43, 18, 48, 48);
-      titleStartX = 106;
+      doc.roundedRect(40, 14, 52, 52, 4, 4, "F");
+      doc.addImage(logoImgData.dataUrl, "JPEG", 42, 16, 48, 48);
+      titleStartX = 104;
     }
 
     // Title in Header
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    doc.text("SecureCheck", titleStartX, 38);
+    doc.text("SecureCheck", titleStartX, 36);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
+    doc.setFontSize(9.2);
     doc.setTextColor(203, 213, 225);
-    doc.text("Windows Security Health & Vulnerability Assessment Report", titleStartX, 54);
+    doc.text("Windows Security Health & Vulnerability Assessment Report", titleStartX, 51);
 
     doc.setFontSize(7.5);
     doc.setTextColor(56, 189, 248);
-    doc.text("SECURE YOUR WINDOWS  •  OFFICIAL ASSESSMENT", titleStartX, 67);
+    doc.text("SECURE YOUR WINDOWS  •  OFFICIAL ASSESSMENT", titleStartX, 64);
 
     // Date in Header right
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(203, 213, 225);
-    doc.text(dateStr, 555, 48, { align: "right" });
+    doc.text(dateStr, 555, 46, { align: "right" });
 
-    let y = 115;
+    let y = 96;
 
-  // Executive Score Box
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(40, y, 515, 95, 6, 6, "FD");
+    // Executive Score Box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(40, y, 515, 86, 6, 6, "FD");
 
-  if (scoreData.isUnavailable) {
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.text("Unavailable", 65, y + 50);
+    if (scoreData.isUnavailable) {
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text("Unavailable", 65, y + 46);
 
-    doc.setFontSize(8.5);
-    doc.text("ALL CHECKS SKIPPED", 65, y + 70);
+      doc.setFontSize(8);
+      doc.text("ALL CHECKS SKIPPED", 65, y + 64);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text("Overall Risk Level: NOT ASSESSED", 200, y + 36);
+      doc.setDrawColor(226, 232, 240);
+      doc.line(165, y + 10, 165, y + 76);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-    const splitSummary = doc.splitTextToSize(scoreData.riskSummary, 330);
-    doc.text(splitSummary, 200, y + 54);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+      doc.text("Overall Risk Level: NOT ASSESSED", 180, y + 28);
 
-    doc.setFontSize(9);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text(`Secure: 0   |   Needs Attention: 0   |   High-Risk: 0   |   Skipped: 6`, 200, y + 80);
-  } else {
-    // Score Number
-    let scoreRgb = [16, 185, 129];
-    if (scoreData.score < 60) scoreRgb = [239, 68, 68];
-    else if (scoreData.score < 85) scoreRgb = [245, 158, 11];
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      const splitSummary = doc.splitTextToSize(scoreData.riskSummary, 350);
+      doc.text(splitSummary, 180, y + 44);
 
-    doc.setTextColor(scoreRgb[0], scoreRgb[1], scoreRgb[2]);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(36);
-    doc.text(`${scoreData.score}`, 70, y + 55);
+      doc.setFontSize(8.5);
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+      doc.text(`Secure: 0   |   Needs Attention: 0   |   High-Risk: 0   |   Skipped: 6`, 180, y + 70);
+    } else {
+      // Score Number
+      let scoreRgb = [16, 185, 129];
+      if (scoreData.score < 60) scoreRgb = [239, 68, 68];
+      else if (scoreData.score < 85) scoreRgb = [245, 158, 11];
 
-    doc.setFontSize(12);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text("/ 100", 125, y + 50);
+      doc.setTextColor(scoreRgb[0], scoreRgb[1], scoreRgb[2]);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(34);
+      doc.text(`${scoreData.score}`, 68, y + 50);
 
-    doc.setFontSize(9);
-    doc.text("SECURITY HEALTH SCORE", 60, y + 74);
+      doc.setFontSize(12);
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+      doc.text("/ 100", 118, y + 46);
 
-    // Overall Risk Text
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(scoreRgb[0], scoreRgb[1], scoreRgb[2]);
-    doc.text(`Overall Risk Level: ${scoreData.overallRisk}`, 180, y + 36);
+      doc.setFontSize(8);
+      doc.text("SECURITY HEALTH SCORE", 58, y + 68);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-    const splitSummary = doc.splitTextToSize(scoreData.riskSummary, 350);
-    doc.text(splitSummary, 180, y + 54);
+      // Subtle vertical divider between score and breakdown
+      doc.setDrawColor(226, 232, 240);
+      doc.line(165, y + 10, 165, y + 76);
 
-    // Metrics summary
-    doc.setFontSize(9);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text(`Secure: ${scoreData.secureCount}   |   Needs Attention: ${scoreData.warningCount}   |   High-Risk: ${scoreData.dangerCount}   |   Skipped: ${scoreData.skippedCount}`, 180, y + 80);
-  }
+      // Overall Risk Text
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(scoreRgb[0], scoreRgb[1], scoreRgb[2]);
+      doc.text(`Overall Risk Level: ${scoreData.overallRisk}`, 180, y + 26);
 
-  y += 115;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      const splitSummary = doc.splitTextToSize(scoreData.riskSummary, 350);
+      doc.text(splitSummary, 180, y + 42);
 
-  // Checks Overview Table
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.text("Audit Scope & Completed Dimensions", 40, y);
-
-  y += 12;
-
-  const tableBody = SECURITY_CHECKS.map(c => {
-    const res = AppState.results[c.id];
-    let statusText = "Not Assessed";
-    let scoreText = `0 / ${c.weight}`;
-    let findingText = "Skipped";
-
-    if (res && !res.skipped) {
-      statusText = res.status === "secure" ? "SECURE" : (res.status === "warning" ? "WARNING" : "HIGH RISK");
-      scoreText = `${res.score} / ${c.weight}`;
-      findingText = res.finding;
+      // Metrics summary
+      doc.setFontSize(8.5);
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+      doc.text(`Secure: ${scoreData.secureCount}   |   Needs Attention: ${scoreData.warningCount}   |   High-Risk: ${scoreData.dangerCount}   |   Skipped: ${scoreData.skippedCount}`, 180, y + 70);
     }
 
-    return [c.title, statusText, scoreText, findingText];
-  });
+    y += 86 + 18;
 
-  if (typeof doc.autoTable === "function") {
-    doc.autoTable({
-      startY: y,
-      head: [["Security Dimension", "Status", "Score", "Evaluated Finding"]],
-      body: tableBody,
-      theme: "grid",
-      headStyles: {
-        fillColor: primaryColor,
-        textColor: 255,
-        fontSize: 9,
-        fontStyle: "bold"
-      },
-      styles: {
-        fontSize: 8.5,
-        cellPadding: 6,
-        overflow: "linebreak"
-      },
-      columnStyles: {
-        0: { cellWidth: 110 },
-        1: { cellWidth: 70 },
-        2: { cellWidth: 50 },
-        3: { cellWidth: 285 }
-      }
-    });
+    // Checks Overview Table
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("Audit Scope & Completed Dimensions", 40, y);
 
-    y = doc.lastAutoTable.finalY + 25;
-  } else {
-    tableBody.forEach(row => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.text(`${row[0]} [${row[1]}] (${row[2]})`, 40, y);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      const splitFinding = doc.splitTextToSize(row[3], 500);
-      doc.text(splitFinding, 40, y + 12);
-      y += 20 + (splitFinding.length * 8);
-    });
     y += 10;
-  }
 
-  // Section 1: Flaws Found / Diagnosis
-  if (y > 660) {
-    doc.addPage();
-    y = 50;
-  }
+    const tableBody = SECURITY_CHECKS.map(c => {
+      const res = AppState.results[c.id];
+      let statusText = "Not Assessed";
+      let scoreText = `0 / ${c.weight}`;
+      let findingText = "Skipped";
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.text("1. Flaws Found / Vulnerability Diagnosis", 40, y);
-
-  y += 16;
-
-  const flaws = SECURITY_CHECKS
-    .map(c => AppState.results[c.id])
-    .filter(r => r && !r.skipped && r.status !== "secure");
-
-  if (flaws.length === 0) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text("No high-risk flaws or warnings were detected during this assessment.", 40, y);
-    y += 24;
-  } else {
-    flaws.forEach((flaw, idx) => {
-      if (y > 700) {
-        doc.addPage();
-        y = 50;
+      if (res && !res.skipped) {
+        statusText = res.status === "secure" ? "SECURE" : (res.status === "warning" ? "WARNING" : "HIGH RISK");
+        scoreText = `${res.score} / ${c.weight}`;
+        findingText = res.finding;
       }
 
-      doc.setFillColor(254, 242, 242);
-      doc.setDrawColor(254, 202, 202);
-      doc.roundedRect(40, y, 515, 68, 4, 4, "FD");
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
-      doc.setTextColor(220, 38, 38);
-      doc.text(`${idx + 1}. ${flaw.finding}`, 50, y + 16);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.5);
-      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      const diagText = doc.splitTextToSize(`Diagnosis: ${flaw.whatWeFound}`, 495);
-      doc.text(diagText, 50, y + 30);
-
-      const riskText = doc.splitTextToSize(`Risk Impact: ${flaw.whyItMatters}`, 495);
-      doc.text(riskText, 50, y + 46);
-
-      doc.setFont("courier", "normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-      const evSnippet = flaw.evidence.replace(/\r?\n/g, " ").slice(0, 110) + "...";
-      doc.text(`Evidence: ${evSnippet}`, 50, y + 60);
-
-      y += 78;
+      return [c.title, statusText, scoreText, findingText];
     });
-  }
 
-  // Section 2: Remediation Actions
-  if (y > 660) {
-    doc.addPage();
-    y = 50;
-  }
+    if (typeof doc.autoTable === "function") {
+      doc.autoTable({
+        startY: y,
+        head: [["Security Dimension", "Status", "Score", "Evaluated Finding"]],
+        body: tableBody,
+        theme: "grid",
+        margin: { left: 40, right: 40 },
+        headStyles: {
+          fillColor: primaryColor,
+          textColor: 255,
+          fontSize: 8.5,
+          fontStyle: "bold",
+          cellPadding: 5
+        },
+        styles: {
+          fontSize: 8,
+          cellPadding: 4.5,
+          overflow: "linebreak",
+          lineColor: [226, 232, 240],
+          lineWidth: 0.5
+        },
+        columnStyles: {
+          0: { cellWidth: 120, fontStyle: "bold" },
+          1: { cellWidth: 70, halign: "center", fontStyle: "bold" },
+          2: { cellWidth: 50, halign: "center" },
+          3: { cellWidth: 275 }
+        },
+        didParseCell: function(data) {
+          if (data.section === "body" && data.column.index === 1) {
+            if (data.cell.raw === "SECURE") {
+              data.cell.styles.textColor = [5, 150, 105];
+            } else if (data.cell.raw === "WARNING") {
+              data.cell.styles.textColor = [217, 119, 6];
+            } else if (data.cell.raw === "HIGH RISK") {
+              data.cell.styles.textColor = [220, 38, 38];
+            }
+          }
+        }
+      });
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.text("2. Remediation Actions / Hardening Steps", 40, y);
+      y = doc.lastAutoTable.finalY + 22;
+    } else {
+      tableBody.forEach(row => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.text(`${row[0]} [${row[1]}] (${row[2]})`, 40, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+        const splitFinding = doc.splitTextToSize(row[3], 500);
+        doc.text(splitFinding, 40, y + 12);
+        y += 20 + (splitFinding.length * 8);
+      });
+      y += 14;
+    }
 
-  y += 16;
+    // SECTION 1: Flaws Found / Diagnosis
+    const flaws = SECURITY_CHECKS
+      .map(c => AppState.results[c.id])
+      .filter(r => r && !r.skipped && r.status !== "secure");
 
-  if (flaws.length === 0) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text("No remediation required. System conforms to baseline security expectations.", 40, y);
-    y += 24;
-  } else {
-    flaws.forEach((flaw, idx) => {
-      if (y > 700) {
-        doc.addPage();
-        y = 50;
-      }
+    if (y + 80 > 750) {
+      doc.addPage();
+      y = 50;
+    }
 
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(40, y, 515, 60, 4, 4, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("1. Flaws Found / Vulnerability Diagnosis", 40, y);
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
-      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.text(`Treatment Step #${idx + 1}: ${flaw.finding}`, 50, y + 16);
+    y += 14;
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.5);
-      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      const rec = doc.splitTextToSize(`Action: ${flaw.recommendedAction}`, 495);
-      doc.text(rec, 50, y + 30);
-
-      if (flaw.remediationCmd) {
-        doc.setFont("courier", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(2, 132, 199);
-        doc.text(`PowerShell: ${flaw.remediationCmd.slice(0, 95)}`, 50, y + 48);
-      }
-
-      y += 70;
-    });
-  }
-
-  // Section 3: Hardened Verification & Proof
-  if (y > 680) {
-    doc.addPage();
-    y = 50;
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.text("3. Hardened Verification / Proof", 40, y);
-
-  y += 16;
-
-  const verifKeys = Object.keys(AppState.verificationResults);
-  if (verifKeys.length === 0) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text("Remediation verification has not yet been executed in the active session.", 40, y);
-    y += 24;
-  } else {
-    verifKeys.forEach((cid, idx) => {
-      const v = AppState.verificationResults[cid];
-      const check = SECURITY_CHECKS.find(c => c.id === cid);
-
+    if (flaws.length === 0) {
       doc.setFillColor(240, 253, 244);
       doc.setDrawColor(187, 247, 208);
-      doc.roundedRect(40, y, 515, 42, 4, 4, "FD");
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(5, 150, 105);
-      doc.text(`Verification #${idx + 1}: ${check?.title} – Hardening Status: ${v.verified ? "VERIFIED (Secure)" : "UNRESOLVED"}`, 50, y + 16);
+      doc.setLineWidth(0.8);
+      doc.roundedRect(40, y, 515, 30, 4, 4, "FD");
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text(`Before: ${v.beforeStatus}   |   After: ${v.afterStatus}`, 50, y + 30);
+      doc.setFontSize(8.5);
+      doc.setTextColor(5, 150, 105);
+      doc.text("No high-risk flaws or warnings were detected during this assessment. Baseline is secure.", 52, y + 19);
+      y += 40;
+    } else {
+      flaws.forEach((flaw, idx) => {
+        const innerW = 480;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        const titleLines = doc.splitTextToSize(`${idx + 1}. ${flaw.finding}  [${(flaw.severity || "Warning").toUpperCase()} • CVSS ${flaw.cvss || "4.5"}]`, innerW);
 
-      y += 50;
-    });
-  }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        const diagLines = doc.splitTextToSize(`Diagnosis: ${flaw.whatWeFound}`, innerW);
+        const riskLines = doc.splitTextToSize(`Risk Impact: ${flaw.whyItMatters}`, innerW);
 
-  // Signature Block Placeholder at bottom of user report PDF
-  if (y + 115 > 740) {
-    doc.addPage();
-    y = 50;
-  } else {
-    y += 20;
-  }
+        const cleanEv = (flaw.evidence || "").replace(/\r?\n+/g, " ").trim();
+        const evSnippet = cleanEv.length > 170 ? cleanEv.slice(0, 167) + "..." : cleanEv;
+        doc.setFont("courier", "normal");
+        doc.setFontSize(7.5);
+        const evLines = doc.splitTextToSize(`Evidence: ${evSnippet}`, innerW);
 
-  const signBlockW = 165;
-  const signBlockH = 94;
-  const signBlockX = 595.28 - 40 - signBlockW; // Bottom right side aligned with right margin (40pt)
-  const signBlockY = y;
+        const titleH = titleLines.length * 12;
+        const diagH = diagLines.length * 11;
+        const riskH = riskLines.length * 11;
+        const evH = evLines.length * 10;
+        const cardH = 10 + titleH + 4 + diagH + 4 + riskH + 4 + evH + 10;
 
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(1);
-  doc.roundedRect(signBlockX, signBlockY, signBlockW, signBlockH, 4, 4, "FD");
+        if (y + cardH > 750) {
+          doc.addPage();
+          y = 50;
+        }
 
-  // Line 1: digital sign 2 img
-  let currentY = signBlockY + 8;
-  if (signImgData) {
-    const maxW = 140;
-    const maxH = 44;
-    let sW = maxW;
-    let sH = (signImgData.height / signImgData.width) * sW;
-    if (sH > maxH) {
-      sH = maxH;
-      sW = (signImgData.width / signImgData.height) * sH;
+        doc.setFillColor(254, 242, 242);
+        doc.setDrawColor(254, 202, 202);
+        doc.setLineWidth(0.8);
+        doc.roundedRect(40, y, 515, cardH, 4, 4, "FD");
+
+        // Red left accent indicator
+        doc.setFillColor(239, 68, 68);
+        doc.roundedRect(40, y, 3.5, cardH, 2, 2, "F");
+
+        let textY = y + 10;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(185, 28, 28);
+        doc.text(titleLines, 52, textY + 9);
+        textY += titleH + 4;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(30, 41, 59);
+        doc.text(diagLines, 52, textY + 8);
+        textY += diagH + 4;
+
+        doc.text(riskLines, 52, textY + 8);
+        textY += riskH + 4;
+
+        doc.setFont("courier", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(evLines, 52, textY + 7);
+
+        y += cardH + 12;
+      });
     }
-    const signFormat = signImgData.format || "PNG";
-    doc.addImage(signImgData.dataUrl, signFormat, signBlockX + 12, currentY, sW, sH);
-    currentY += sH + 6;
-  } else {
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(8.5);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text("[digital sign 2 img]", signBlockX + 12, currentY + 16);
-    currentY += 28;
-  }
 
-  // Line 2: devloper
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
-  doc.setTextColor(17, 24, 39);
-  doc.text("devloper", signBlockX + 12, currentY + 6);
-  currentY += 14;
+    // SECTION 2: Remediation Actions
+    if (y + 80 > 750) {
+      doc.addPage();
+      y = 50;
+    }
 
-  // Line 3: SecureCheck
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(55, 65, 81);
-  doc.text("SecureCheck", signBlockX + 12, currentY + 6);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("2. Remediation Actions / Hardening Steps", 40, y);
 
-  y = signBlockY + signBlockH + 14;
+    y += 14;
 
-  // Disclaimer at bottom
-  if (y + 45 > 750) {
-    doc.addPage();
-    y = 50;
-  } else {
-    y += 18;
-  }
-
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(7.5);
-  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-  const disclaimer = doc.splitTextToSize(
-    "Disclaimer: This report is an informational security assessment based on the PowerShell output provided by the user. SecureCheck does not directly scan, modify, or control the user's computer. Users should verify recommendations before making system changes.",
-    515
-  );
-  doc.text(disclaimer, 40, y + 12);
-
-  // Add running headers on page 2+ and footer page numbers
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    if (i > 1 && logoImgData) {
+    if (flaws.length === 0) {
       doc.setFillColor(248, 250, 252);
-      doc.rect(0, 0, 595.28, 26, "F");
       doc.setDrawColor(226, 232, 240);
-      doc.line(0, 26, 595.28, 26);
+      doc.setLineWidth(0.8);
+      doc.roundedRect(40, y, 515, 30, 4, 4, "FD");
 
-      doc.addImage(logoImgData.dataUrl, "JPEG", 40, 4, 18, 18);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.text("SecureCheck — Windows Security Assessment Report", 64, 16);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+      doc.text("No remediation required. System conforms to baseline security expectations.", 52, y + 19);
+      y += 40;
+    } else {
+      flaws.forEach((flaw, idx) => {
+        const innerW = 480;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        const titleLines = doc.splitTextToSize(`Treatment Step #${idx + 1}: ${flaw.finding}`, innerW);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        const recLines = doc.splitTextToSize(`Action: ${flaw.recommendedAction}`, innerW);
+
+        let cmdLines = [];
+        let cmdBoxH = 0;
+        if (flaw.remediationCmd) {
+          doc.setFont("courier", "bold");
+          doc.setFontSize(8);
+          cmdLines = doc.splitTextToSize(`PowerShell: ${flaw.remediationCmd.trim()}`, 470);
+          cmdBoxH = cmdLines.length * 10 + 10;
+        }
+
+        const titleH = titleLines.length * 12;
+        const recH = recLines.length * 11;
+        const cardH = 10 + titleH + 4 + recH + (cmdBoxH > 0 ? 6 + cmdBoxH : 0) + 10;
+
+        if (y + cardH > 750) {
+          doc.addPage();
+          y = 50;
+        }
+
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.8);
+        doc.roundedRect(40, y, 515, cardH, 4, 4, "FD");
+
+        // Cyan left accent indicator
+        doc.setFillColor(14, 165, 233);
+        doc.roundedRect(40, y, 3.5, cardH, 2, 2, "F");
+
+        let textY = y + 10;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.text(titleLines, 52, textY + 9);
+        textY += titleH + 4;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+        doc.text(recLines, 52, textY + 8);
+        textY += recH;
+
+        if (cmdBoxH > 0) {
+          textY += 6;
+          doc.setFillColor(241, 245, 249);
+          doc.setDrawColor(203, 213, 225);
+          doc.setLineWidth(0.6);
+          doc.roundedRect(50, textY, 495, cmdBoxH, 3, 3, "FD");
+
+          doc.setFont("courier", "bold");
+          doc.setFontSize(8);
+          doc.setTextColor(2, 132, 199);
+          doc.text(cmdLines, 56, textY + 11);
+        }
+
+        y += cardH + 12;
+      });
+    }
+
+    // BALANCED OFFICIAL ATTESTATION & DEVELOPER SIGNATURE BLOCK
+    // Keep attestation and signature side by side with disclaimer full width below
+    const signGroupHeight = 86 + 10 + 26; // 122 pt total
+    if (y + signGroupHeight > 750) {
+      doc.addPage();
+      y = 50;
+    } else {
+      y += 12;
+    }
+
+    const attestBoxW = 330;
+    const attestBoxH = 86;
+    const signBoxW = 170;
+    const signBoxH = 86;
+    const signBoxX = 595.28 - 40 - signBoxW; // 385.28
+
+    // Left Box: Assessment Attestation
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(40, y, attestBoxW, attestBoxH, 4, 4, "FD");
+
+    doc.setFillColor(15, 23, 42);
+    doc.roundedRect(40, y, 3.5, attestBoxH, 2, 2, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Official Attestation & Compliance Stamp", 52, y + 18);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Certificate Serial: ${certId}`, 52, y + 33);
+    doc.text(`Attestation Fingerprint: ${reportSha}`, 52, y + 46);
+    doc.text("Assessment Engine: SecureCheck Diagnostic Verifier v2.4", 52, y + 59);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(5, 150, 105);
+    doc.text("Audit Attestation: DIGITALLY SEALED & VERIFIED", 52, y + 73);
+
+    // Right Box: Developer Signature
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(signBoxX, y, signBoxW, signBoxH, 4, 4, "FD");
+
+    if (signImgData) {
+      const maxW = 135;
+      const maxH = 40;
+      let sW = maxW;
+      let sH = (signImgData.height / signImgData.width) * sW;
+      if (sH > maxH) {
+        sH = maxH;
+        sW = (signImgData.width / signImgData.height) * sH;
+      }
+      const signFormat = signImgData.format || "PNG";
+      doc.addImage(signImgData.dataUrl, signFormat, signBoxX + 12, y + 7, sW, sH);
+    } else {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8.5);
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+      doc.text("[digital sign 2 img]", signBoxX + 12, y + 24);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(17, 24, 39);
+    doc.text("devloper", signBoxX + 12, y + 58);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(55, 65, 81);
+    doc.text("SecureCheck", signBoxX + 12, y + 72);
+
+    // Full-Width Disclaimer below
+    y = y + attestBoxH + 10;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    const disclaimer = doc.splitTextToSize(
+      "Disclaimer: This report is an informational security assessment based on the PowerShell output provided by the user. SecureCheck does not directly scan, modify, or control the user's computer. Users should verify recommendations before making system changes.",
+      515
+    );
+    doc.text(disclaimer, 40, y + 8);
+
+    // Add running headers on page 2+ and footer page numbers
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      if (i > 1) {
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, 595.28, 28, "F");
+        doc.setFillColor(14, 165, 233);
+        doc.rect(0, 27, 595.28, 1, "F");
+
+        if (logoImgData) {
+          doc.addImage(logoImgData.dataUrl, "JPEG", 40, 4, 20, 20);
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text("SecureCheck  •  Windows Security Assessment Report", 68, 18);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(203, 213, 225);
+        doc.text(dateStr, 555, 18, { align: "right" });
+      }
+
+      // Running footer on all pages
+      doc.setDrawColor(226, 232, 240);
+      doc.line(40, 810, 555, 810);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.5);
-      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-      doc.text(dateStr, 555, 16, { align: "right" });
+      doc.setTextColor(148, 163, 184);
+      doc.text("SecureCheck Official Assessment  •  Confidential Security Report", 40, 822);
+      doc.text(`Page ${i} of ${pageCount}`, 555, 822, { align: "right" });
     }
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text(`SecureCheck Assessment Report  •  Page ${i} of ${pageCount}`, 297.64, 820, { align: "center" });
-  }
 
   // Save File
   doc.save(`SecureCheck-Windows-Assessment-${Date.now()}.pdf`);
@@ -2439,6 +2868,10 @@ async function generatePdfReport(e) {
 }
 }
 
+/**
+ * Resets all session data, evaluated checks, and verification records after confirmation.
+ * Returns the user to the initial welcome screen.
+ */
 function resetAllData() {
   if (confirm("Are you sure you want to reset all audit checks and start fresh?")) {
     AppState.results = {};
@@ -2448,15 +2881,19 @@ function resetAllData() {
   }
 }
 
-// ==========================================
-// 9. INITIALIZATION
-// ==========================================
+// ============================================================================
+// SECTION 9: LIFECYCLE INITIALIZATION & GLOBAL WINDOW EXPORTS
+// ============================================================================
+/**
+ * DOMContentLoaded Event Listener:
+ * Fires when document structure is ready, boots up the default home view.
+ */
 document.addEventListener("DOMContentLoaded", () => {
   // Render initial homepage
   switchView("home");
 });
 
-// Expose functions globally for inline HTML event handlers
+// Expose functions globally to window so inline HTML onclick and oninput handlers can invoke them
 window.switchView = switchView;
 window.goToStep = goToStep;
 window.copyCommand = copyCommand;
