@@ -1508,6 +1508,13 @@ function renderReport() {
       </div>
       ${verifSummaryHtml}
 
+      <!-- SIGNATURE BLOCK PLACEHOLDER -->
+      <div class="signature-block-placeholder" id="reportSignatureBlock">
+        <img src="/digital-sign-2-cropped.png" alt="digital sign 2 img" class="signature-block-img" id="digitalSign2Img" onerror="this.src='/digital-sign-2.png'" />
+        <div class="signature-block-role">devloper</div>
+        <div class="signature-block-org">SecureCheck</div>
+      </div>
+
       <!-- DISCLAIMER -->
       <div class="disclaimer-box">
         <strong>Security Disclaimer:</strong> This report is an informational security assessment based on the PowerShell output provided by the user. SecureCheck does not directly scan, modify, or control the user's computer. Users should verify recommendations before making system changes.
@@ -1736,12 +1743,14 @@ function loadImageAsBase64(url, maxWidth = 800, maxHeight = 800) {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+        const mimeType = url.toLowerCase().includes(".png") ? "image/png" : "image/jpeg";
+        const dataUrl = canvas.toDataURL(mimeType, 0.95);
         resolve({
           dataUrl,
           width,
           height,
-          aspect: width / height
+          aspect: width / height,
+          format: mimeType === "image/png" ? "PNG" : "JPEG"
         });
       } catch (err) {
         console.warn("Canvas export failed for image:", url, err);
@@ -1774,8 +1783,14 @@ async function generatePdfReport(e) {
   }
 
   try {
-    // Pre-load application logo
-    const logoImgData = await loadImageAsBase64("/web-logo.jpg", 300, 300);
+    // Pre-load application logo and digital sign 2
+    let [logoImgData, signImgData] = await Promise.all([
+      loadImageAsBase64("/web-logo.jpg", 300, 300),
+      loadImageAsBase64("/digital-sign-2-cropped.png", 600, 300)
+    ]);
+    if (!signImgData) {
+      signImgData = await loadImageAsBase64("/digital-sign-2.png", 600, 300);
+    }
 
     const { jsPDF } = window.jspdf || window;
     const doc = new jsPDF({
@@ -2114,6 +2129,61 @@ async function generatePdfReport(e) {
       y += 50;
     });
   }
+
+  // Signature Block Placeholder at bottom of user report PDF
+  if (y + 115 > 740) {
+    doc.addPage();
+    y = 50;
+  } else {
+    y += 20;
+  }
+
+  const signBlockW = 165;
+  const signBlockH = 94;
+  const signBlockX = 595.28 - 40 - signBlockW; // Bottom right side aligned with right margin (40pt)
+  const signBlockY = y;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(1);
+  doc.roundedRect(signBlockX, signBlockY, signBlockW, signBlockH, 4, 4, "FD");
+
+  // Line 1: digital sign 2 img
+  let currentY = signBlockY + 8;
+  if (signImgData) {
+    const maxW = 140;
+    const maxH = 44;
+    let sW = maxW;
+    let sH = (signImgData.height / signImgData.width) * sW;
+    if (sH > maxH) {
+      sH = maxH;
+      sW = (signImgData.width / signImgData.height) * sH;
+    }
+    const signFormat = signImgData.format || "PNG";
+    doc.addImage(signImgData.dataUrl, signFormat, signBlockX + 12, currentY, sW, sH);
+    currentY += sH + 6;
+  } else {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8.5);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.text("[digital sign 2 img]", signBlockX + 12, currentY + 16);
+    currentY += 28;
+  }
+
+  // Line 2: devloper
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.setTextColor(17, 24, 39);
+  doc.text("devloper", signBlockX + 12, currentY + 6);
+  currentY += 14;
+
+  // Line 3: SecureCheck
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(55, 65, 81);
+  doc.text("SecureCheck", signBlockX + 12, currentY + 6);
+
+  y = signBlockY + signBlockH + 14;
 
   // Disclaimer at bottom
   if (y + 45 > 750) {
