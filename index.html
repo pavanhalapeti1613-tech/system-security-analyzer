@@ -54,6 +54,10 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
               <span>Verification</span>
             </button>
+            <button class="nav-btn" id="nav-about" onclick="switchView('about')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+              <span>About Us</span>
+            </button>
           </nav>
         </div>
       </div>
@@ -200,6 +204,82 @@
       <!-- 5. VIEW: HARDENED VERIFICATION -->
       <section class="view-section verification-view-wrapper" id="view-verification" style="display: none;">
         <div id="verificationContent"></div>
+      </section>
+
+      <!-- 6. VIEW: ABOUT US -->
+      <section class="view-section about-view-wrapper" id="view-about" style="display: none;">
+        <div class="about-container">
+          <!-- Page Header -->
+          <div class="about-header">
+            <div class="about-badge-container">
+              <span class="privacy-pill" id="about-privacy-pill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                SecureCheck Identity &amp; Origins
+              </span>
+            </div>
+            <h1 class="about-main-title" id="about-main-title">About Us</h1>
+          </div>
+
+          <!-- Content Sections -->
+          <div class="about-content-stack">
+            <!-- SECTION 1: ABOUT THE FOUNDER -->
+            <section class="about-card founder-profile-card" id="card-about-founder">
+              <div class="about-card-tag">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span>Profile</span>
+              </div>
+
+              <h2 class="about-section-heading">About the Founder</h2>
+
+              <div class="founder-profile-body">
+                <div class="founder-info-column">
+                  <h3 class="founder-name">Pavan Halapeti</h3>
+
+                  <div class="founder-academic-line">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+                    <strong>Electronics and Communication Engineering Student</strong>
+                  </div>
+
+                  <!-- Visually Prominent Founder & Developer Role -->
+                  <div class="founder-prominent-role" id="founder-prominent-role">
+                    <div class="prominent-glow-sheen"></div>
+                    <div class="prominent-role-inner">
+                      <svg class="prominent-shield-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                      <strong class="prominent-title">Founder &amp; Developer — SecureCheck</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- SECTION 2: ABOUT THE WEBSITE -->
+            <section class="about-card website-profile-card" id="card-about-website">
+              <div class="about-card-tag website-tag">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                <span>Platform</span>
+              </div>
+
+              <h2 class="about-section-heading">About the Website</h2>
+
+              <div class="website-desc-card">
+                <p class="website-desc-lead">
+                  <strong>SecureCheck</strong> is a security-focused project created to help users understand and improve their digital security through practical tools and simple security checks.
+                </p>
+              </div>
+
+              <div class="about-action-row">
+                <button class="btn btn-primary" id="btn-about-start-check" onclick="switchView('audit')">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  Start Security Check
+                </button>
+                <button class="btn btn-secondary" id="btn-about-back-home" onclick="switchView('home')">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                  Back to Home
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
       </section>
     </main>
 
