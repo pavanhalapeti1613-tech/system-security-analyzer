@@ -1,4 +1,4 @@
-# 🛡️ SecurCheck
+# 🛡️ SecureCheck
 
 A web-based security analysis tool designed to help users understand the security status of their system through a simple and user-friendly interface.
 
