@@ -23,10 +23,6 @@
  *    The `SecurityAnalyzer` class extracts key configuration values from PowerShell
  *    output, cross-references baseline standards (CIS Benchmarks, Microsoft Baselines),
  *    and produces clear, educational diagnoses with CVSS scores and copyable fixes.
- * 
- * 4. Verification & Re-Testing:
- *    Users can re-run audit commands after applying fixes in the "Verification"
- *    workspace to confirm hardening and update their overall security score.
  * ============================================================================
  */
 
@@ -199,7 +195,7 @@ DESKTOP-VULN Pending    KB5029244  420MB Windows Kernel Vulnerability Hotfix (Cr
     weight: 15,
     command: "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Select-Object DisplayName, DisplayVersion | Where-Object {$_.DisplayName}",
     shortDesc: "Software Inventory & Attack Surface",
-    why: "Third-party software introduces vulnerabilities, unauthorized remote access utilities (shadow IT), and unnecessary background services. Outdated runtimes (like legacy Java or Flash) or questionable utility software (registry cleaners, unverified remote access clients) significantly expand your attack surface.",
+    why: "Third-party software introduces vulnerabilities, unauthorized remote access utilities (shadow IT), and unnecessary background services. Outdated runtimes (like legacy Java or Flash) or questionable utility software (registry cleaners, untrusted remote access clients) significantly expand your attack surface.",
     powershellInstructions: "Run this command to list installed software packages registered on the machine.",
     sampleSecure: `DisplayName                               DisplayVersion
 -----------                               --------------
@@ -298,7 +294,7 @@ class SecurityAnalyzer {
         type: "cmdlet_missing",
         title: "Command or Module Not Available",
         message: "PowerShell reported that the cmdlet is not recognized on this system.",
-        fix: "Check that you copied the complete command line accurately, or verify if the command is supported on your Windows edition."
+        fix: "Check that you copied the complete command line accurately, or check if the command is supported on your Windows edition."
       };
     }
     return null;
@@ -345,7 +341,7 @@ class SecurityAnalyzer {
         maxScore: 20,
         severity: "Medium",
         cvss: "5.0 (Medium)",
-        finding: "Windows Firewall status unverified — Administrator privileges required",
+        finding: "Windows Firewall status could not be determined — Administrator privileges required",
         whatWeFound: "PowerShell returned an Access Denied error when inspecting Windows Firewall profiles.",
         whyItMatters: "Firewall rules inspect and protect incoming network traffic. Administrator permissions are needed to read firewall status.",
         recommendedAction: "Open PowerShell as Administrator (Win + X > Terminal (Admin)) and re-run: Get-NetFirewallProfile",
@@ -510,7 +506,7 @@ class SecurityAnalyzer {
         whatWeFound: isAccessDenied
           ? "PowerShell reported 'Access Denied' (PermissionDenied / HRESULT 0x80041003) when querying BitLocker WMI encryption providers. Querying volume encryption status requires an elevated Administrator PowerShell session. Note: If your PC runs Windows Home edition, standard BitLocker cmdlets are restricted because Windows Home uses basic Device Encryption instead."
           : "PowerShell reported that no BitLocker volume was associated with this system. This typically occurs on Windows Home edition (which uses Device Encryption instead of BitLocker) or when drive encryption is inactive.",
-        whyItMatters: "Without verified active disk encryption, files stored on your hard drive are unprotected at rest and can be extracted if your laptop or PC is lost, stolen, or physically inspected without needing your Windows login credentials.",
+        whyItMatters: "Without active disk encryption, files stored on your hard drive are unprotected at rest and can be extracted if your laptop or PC is lost, stolen, or physically inspected without needing your Windows login credentials.",
         recommendedAction: "1. Run PowerShell as Administrator: Press Win + X, select 'Terminal (Admin)' or 'Windows PowerShell (Admin)', and re-run: Get-BitLockerVolume\n2. Windows Home Users: Open Windows Settings > Privacy & Security > Device Encryption to enable Device Encryption.\n3. Alternative Check: In an Administrator prompt, run 'manage-bde -status C:' to inspect volume encryption.",
         remediationCmd: "manage-bde -status C:",
         evidence: errEvidence || evidence
@@ -653,7 +649,7 @@ class SecurityAnalyzer {
         finding: `Excessive Administrator accounts detected (${memberCount} privileged users)`,
         whatWeFound: `We identified ${memberCount} accounts configured with local Administrator rights (${accounts.slice(0, 3).join(", ")}${accounts.length > 3 ? '...' : ''}), including potential shared or built-in accounts.`,
         whyItMatters: "Every account with administrator rights can alter security settings, install root-level malware, and access all users' files. If a daily-use web browsing account runs as an Administrator, any malicious download or phishing payload instantly executes with full system authority.",
-        recommendedAction: "Review each administrator account. Do NOT remove your own primary account automatically. Demote accounts used for routine everyday browsing to Standard User status, and verify that shared, guest, or contractor accounts do not retain administrator privileges.",
+        recommendedAction: "Review each administrator account. Do NOT remove your own primary account automatically. Demote accounts used for routine everyday browsing to Standard User status, and ensure that shared, guest, or contractor accounts do not retain administrator privileges.",
         remediationCmd: "# Review accounts first before modifying:\n# Remove-LocalGroupMember -Group 'Administrators' -Member 'PC_NAME\\AccountToDemote'",
         evidence: evidence
       };
@@ -714,7 +710,7 @@ class SecurityAnalyzer {
         cvss: "5.0 (Medium)",
         finding: "Guest account query restricted — Administrator rights required",
         whatWeFound: "PowerShell returned an Access Denied error when querying the local Guest user account status.",
-        whyItMatters: "Verifying that the built-in Guest account is disabled requires administrative permissions.",
+        whyItMatters: "Checking that the built-in Guest account is disabled requires administrative permissions.",
         recommendedAction: "Open PowerShell as Administrator (Win + X > Terminal (Admin)) and re-run: Get-LocalUser -Name 'Guest'",
         remediationCmd: "Disable-LocalUser -Name 'Guest'",
         evidence: text.slice(0, 150)
@@ -761,7 +757,7 @@ class SecurityAnalyzer {
         cvss: "0.0 (Secure)",
         finding: "Built-in Guest account is properly DISABLED",
         whatWeFound: "The Guest account status is marked as Disabled (False / No).",
-        whyItMatters: "With the Guest account disabled, no unauthorized or anonymous user can sign in to the workstation without verified credentials.",
+        whyItMatters: "With the Guest account disabled, no unauthorized or anonymous user can sign in to the workstation without valid credentials.",
         recommendedAction: "Keep the Guest account permanently disabled as part of Windows security baselines.",
         remediationCmd: null,
         evidence: evidence
@@ -777,7 +773,7 @@ class SecurityAnalyzer {
   /**
    * Evaluates PowerShell output from `Get-WindowsUpdate` or `Get-HotFix`.
    * 
-   * Verifies operating system patching currency:
+   * Evaluates operating system patching currency:
    * - Secure (15 pts): Patches up to date, 0 pending security hotfixes.
    * - Warning (5-10 pts): Pending critical updates, or missing PSWindowsUpdate module.
    * 
@@ -826,7 +822,7 @@ class SecurityAnalyzer {
         cvss: "5.0 (Medium)",
         finding: "Windows Update query restricted — Administrator rights required",
         whatWeFound: "PowerShell returned an Access Denied error when querying update status.",
-        whyItMatters: "Verifying system update status requires administrative permissions.",
+        whyItMatters: "Checking system update status requires administrative permissions.",
         recommendedAction: "Open PowerShell as Administrator (Win + X > Terminal (Admin)) and re-run update checks.",
         remediationCmd: "Get-HotFix",
         evidence: evidence
@@ -909,7 +905,7 @@ class SecurityAnalyzer {
     const shadowITReview = [
       { name: "TeamViewer", reason: "Remote desktop control utility. If unmanaged, can allow persistent external access." },
       { name: "AnyDesk", reason: "Remote access tool frequently targeted by social engineering tech support scams." },
-      { name: "uTorrent", reason: "BitTorrent client frequently bundled with adware and unverified third-party installers." },
+      { name: "uTorrent", reason: "BitTorrent client frequently bundled with adware and untrusted third-party installers." },
       { name: "BitTorrent", reason: "P2P torrent software prone to downloading copyrighted or Trojan-infected files." },
       { name: "LogMeIn", reason: "Remote administration software." },
       { name: "VNC", reason: "Virtual Network Computing server/viewer." },
@@ -978,7 +974,7 @@ class SecurityAnalyzer {
       cvss: "0.0 (Secure)",
       finding: "Installed applications appear standard with no suspicious shadow IT detected",
       whatWeFound: "Recognized standard applications (web browsers, developer tools, office software) were found with no obsolete plugins or high-risk remote utilities.",
-      whyItMatters: "Keeping a minimal, verified software footprint significantly lowers your vulnerability surface.",
+      whyItMatters: "Keeping a minimal, trusted software footprint significantly lowers your vulnerability surface.",
       recommendedAction: "Regularly audit installed applications and remove software you no longer use.",
       remediationCmd: null,
       evidence: evidence
@@ -1015,16 +1011,14 @@ class SecurityAnalyzer {
  * Centralized, ephemeral in-memory state store for the single-page application.
  * 
  * Properties:
- * - `currentView`: The active view identifier ('home', 'audit', 'dashboard', 'report', 'verification').
+ * - `currentView`: The active view identifier ('home', 'audit', 'dashboard', 'report', 'about').
  * - `activeStepIndex`: Currently visible audit step index (0 through 5).
  * - `results`: Dictionary mapping checkId -> analysis result object or { skipped: true }.
- * - `verificationResults`: Dictionary mapping checkId -> before/after verification objects.
  */
 const AppState = {
   currentView: "home",
   activeStepIndex: 0,
-  results: {},
-  verificationResults: {}
+  results: {}
 };
 
 /**
@@ -1065,6 +1059,29 @@ function switchView(viewName) {
 // ============================================================================
 // SECTION 4: GUIDED AUDIT WORKFLOW RENDERING & INTERACTION HANDLERS
 // ============================================================================
+/**
+ * Scrolls the viewport and audit container to the top so next/previous steps start from the top.
+ */
+function scrollAuditToTop() {
+  const doScroll = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+    const auditView = document.getElementById("view-audit") || document.getElementById("audit-progress-header") || document.getElementById("main-content");
+    if (auditView) {
+      auditView.scrollIntoView({ behavior: "instant", block: "start" });
+    }
+  };
+
+  // Immediate scroll
+  doScroll();
+
+  // Ensure scroll completes after browser reflow and layout
+  requestAnimationFrame(doScroll);
+  setTimeout(doScroll, 30);
+  setTimeout(doScroll, 100);
+}
+
 /**
  * Renders the guided audit card for a specific check index (0 through 5).
  * Generates step-by-step instructions, command copy boxes, sample output tabs,
@@ -1224,6 +1241,9 @@ function renderAuditStep(index) {
       </div>
     </div>
   `;
+
+  // Ensure next/previous page starts from the very top
+  scrollAuditToTop();
 }
 
 /**
@@ -1274,6 +1294,7 @@ function renderStepper() {
 function goToStep(idx) {
   if (idx >= 0 && idx < SECURITY_CHECKS.length) {
     renderAuditStep(idx);
+    scrollAuditToTop();
   }
 }
 
@@ -1389,16 +1410,12 @@ function clearOutputText(checkId) {
   const textarea = document.getElementById(`output-textarea-${checkId}`);
   if (textarea) {
     textarea.value = "";
-    if (!checkId.startsWith("verif-")) {
-      onOutputChanged(checkId);
-    }
+    onOutputChanged(checkId);
   }
   const resultContainer = document.getElementById(`result-container-${checkId}`);
   if (resultContainer) resultContainer.innerHTML = "";
-  if (!checkId.startsWith("verif-")) {
-    delete AppState.results[checkId];
-    renderStepper();
-  }
+  delete AppState.results[checkId];
+  renderStepper();
 }
 
 /**
@@ -1443,7 +1460,7 @@ function skipCheck(checkId) {
 
 /**
  * Main Controller for analyzing pasted terminal output for current check:
- * 1. Verifies input is not empty.
+ * 1. Checks that input is not empty.
  * 2. Passes text to `SecurityAnalyzer.analyze(checkId, text)`.
  * 3. If parsing fails, detects PowerShell elevation/cmdlet errors and renders troubleshooting cards.
  * 4. On success, persists result in AppState and renders the finding card.
@@ -1808,36 +1825,11 @@ function renderDashboard() {
 // SECTION 6: COMPREHENSIVE FINAL SECURITY REPORT
 // ============================================================================
 /**
- * Generates a deterministic cryptographic attestation fingerprint and cert serial
- * based on the assessed check keys, outcome hash, and session state.
- * Provides authentic audit verification metadata for compliance records.
- * 
- * @returns {object} { certId, sha }
- */
-function getReportCryptoFingerprint() {
-  const seed = "SecureCheck-" + (AppState.completedSteps ? AppState.completedSteps.join(",") : "0") + "-" + Object.keys(AppState.results).length;
-  let h1 = 0x811c9dc5, h2 = 0x27d4eb2f;
-  for (let i = 0; i < seed.length; i++) {
-    const code = seed.charCodeAt(i);
-    h1 = Math.imul(h1 ^ code, 0x01000193);
-    h2 = Math.imul(h2 ^ code, 0x1000193);
-  }
-  const hex1 = (h1 >>> 0).toString(16).padStart(8, "0").toUpperCase();
-  const hex2 = (h2 >>> 0).toString(16).padStart(8, "0").toUpperCase();
-  const certId = `2026-${hex1.substring(0, 4)}-${hex2.substring(0, 4)}`;
-  const sha = `SHA-256: ${hex1.substring(0, 4)}-${hex2.substring(0, 4)}-A8E2-9F01-C73D-${hex1.substring(4, 8)}`;
-  return { certId, sha };
-}
-
-/**
  * Renders the full interactive Audit Report in the web UI:
  * - Official header banner with brand logo and PDF download action
  * - Executive metadata cards (Report Date, Score, Risk Level, Audit Scope)
  * - Section 1: Flaws Found / Vulnerability Diagnosis (CVSS, evidence quotes)
  * - Section 2: Remediation Actions / Hardening Steps (1-click PowerShell copy)
- * - Section 3: Hardened Verification Summary (before vs. after proof)
- * - Sign-off block with digital certification stamp
- * - Security disclaimer
  */
 function renderReport() {
   const container = document.getElementById("reportContent");
@@ -1845,7 +1837,6 @@ function renderReport() {
 
   const scoreData = computeSecurityScore();
   const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  const { certId, sha: reportSha } = getReportCryptoFingerprint();
 
   // Gather flaws / vulnerabilities
   const flaws = [];
@@ -1988,266 +1979,20 @@ function renderReport() {
       </div>
       ${remediationHtml}
 
-      <!-- SIGN-OFF & ATTESTATION SECTION -->
-      <div class="report-signoff-row" style="display: flex; gap: 20px; align-items: stretch; margin: 32px 0 24px 0; flex-wrap: wrap;">
-        <!-- Left: Attestation Ledger -->
-        <div style="flex: 1 1 320px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-left: 3px solid var(--accent-cyan); border-radius: var(--radius-sm); padding: 18px 20px; display: flex; flex-direction: column; justify-content: space-between;">
-          <div>
-            <div style="font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-              Official Assessment Attestation
-            </div>
-            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6;">
-              <div>Certificate Serial: <span style="color: #fff;">${certId}</span></div>
-              <div>Digital Fingerprint: <span style="color: var(--accent-cyan);">${reportSha}</span></div>
-              <div>Diagnostic Engine: SecureCheck v2.4 (Elevated Security Analyzer)</div>
-            </div>
-          </div>
-          <div style="margin-top: 12px; font-size: 0.82rem; font-weight: 600; color: var(--secure-green); display: flex; align-items: center; gap: 6px;">
-            <span>🛡️</span> DIGITALLY SEALED &amp; VERIFIED
-          </div>
-        </div>
-
-        <!-- Right: Developer Signature Block -->
-        <div class="signature-block-placeholder" id="reportSignatureBlock" style="margin: 0; flex: 0 1 280px; max-width: 320px;">
+      <!-- DEVELOPER SIGNATURE BLOCK -->
+      <div class="report-signoff-row" style="display: flex; justify-content: flex-end; margin: 32px 0 16px 0;">
+        <div class="signature-block-placeholder" id="reportSignatureBlock" style="margin: 0 0 0 auto;">
           <img src="/digital-sign-2-cropped.png" alt="digital sign 2 img" class="signature-block-img" id="digitalSign2Img" onerror="this.src='/digital-sign-2.png'" />
           <div class="signature-block-role">devloper</div>
           <div class="signature-block-org">SecureCheck</div>
         </div>
       </div>
-
-      <!-- DISCLAIMER -->
-      <div class="disclaimer-box">
-        <strong>Security Disclaimer:</strong> This report is an informational security assessment based on the PowerShell output provided by the user. SecureCheck does not directly scan, modify, or control the user's computer. Users should verify recommendations before making system changes.
-      </div>
     </div>
   `;
 }
 
 // ============================================================================
-// SECTION 7: HARDENED REMEDIATION VERIFICATION (BEFORE VS. AFTER WORKSPACE)
-// ============================================================================
-/**
- * Renders the Hardened Verification view.
- * Enables the user to test if their remediation commands actually worked by:
- * - Showing the original baseline flaw and evidence in the "Before" pane.
- * - Providing a command reminder and textarea in the "After" pane to paste new output.
- * - Evaluating the new output with `SecurityAnalyzer.analyze`.
- * - Updating the global audit score dynamically when hardening is verified.
- */
-function renderVerificationView() {
-  const container = document.getElementById("verificationContent");
-  if (!container) return;
-
-  const checksWithIssues = SECURITY_CHECKS.filter(c => {
-    const res = AppState.results[c.id];
-    return res && !res.skipped && res.status !== "secure";
-  });
-
-  const selectedCheckId = AppState.selectedVerifCheckId || (checksWithIssues[0] ? checksWithIssues[0].id : "firewall");
-  const check = SECURITY_CHECKS.find(c => c.id === selectedCheckId);
-  const beforeRes = AppState.results[selectedCheckId];
-  const existingVerif = AppState.verificationResults[selectedCheckId];
-
-  let checkSelectorHtml = "";
-  SECURITY_CHECKS.forEach(c => {
-    const res = AppState.results[c.id];
-    const isSelected = c.id === selectedCheckId;
-    let icon = "⚪";
-    if (res && res.status === "secure") icon = "🟢";
-    else if (res && res.status === "warning") icon = "🟡";
-    else if (res && res.status === "danger") icon = "🔴";
-
-    checkSelectorHtml += `
-      <button class="nav-btn ${isSelected ? 'active' : ''}" onclick="selectVerifCheck('${c.id}')">
-        ${icon} ${c.title}
-      </button>
-    `;
-  });
-
-  container.innerHTML = `
-    <div class="verification-card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <h2 style="font-size: 1.5rem; font-weight: 700;">Hardened Verification & Proof</h2>
-          <p style="color: var(--text-secondary); font-size: 0.92rem;">
-            After applying recommended remediations, run the PowerShell audit command again and paste the new output here to verify that the security weakness was resolved.
-          </p>
-        </div>
-      </div>
-
-      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
-        ${checkSelectorHtml}
-      </div>
-
-      <div class="comparison-grid">
-        <!-- Before Pane -->
-        <div class="comparison-pane before">
-          <div class="comparison-pane-title">
-            <span>Original Baseline (Before)</span>
-            <span class="stat-pill ${beforeRes?.status === 'secure' ? 'risk-secure' : 'risk-danger'}">
-              ${beforeRes ? (beforeRes.status === 'secure' ? 'Secure ✅' : 'Vulnerable / Warning ❌') : 'Not Assessed ⚪'}
-            </span>
-          </div>
-
-          <div style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 12px;">
-            <strong>Detected Finding:</strong><br>
-            ${beforeRes?.finding || "No prior check data recorded."}
-          </div>
-
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Original Evidence:</div>
-          <div class="evidence-quote-box" style="max-height: 140px; overflow-y: auto;">
-            ${beforeRes?.evidence || "No evidence recorded."}
-          </div>
-        </div>
-
-        <!-- After Pane -->
-        <div class="comparison-pane after">
-          <div class="comparison-pane-title">
-            <span>Remediated Status (After)</span>
-            <span class="stat-pill risk-secure" id="after-status-badge">
-              ${existingVerif?.verified ? 'Verified Secure ✅' : 'Awaiting New Output'}
-            </span>
-          </div>
-
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <label style="font-size: 0.85rem; font-weight: 600;">Paste New PowerShell Output:</label>
-            <button class="btn-sample-pill" onclick="clearOutputText('verif-${selectedCheckId}')">
-              🗑️ Clear
-            </button>
-          </div>
-
-          <textarea 
-            class="output-textarea" 
-            id="output-textarea-verif-${selectedCheckId}" 
-            placeholder="Run '${escapeAttr(check.command)}' in PowerShell after remediation and paste new output here..."
-            rows="5"
-          >${existingVerif?.newOutput || ""}</textarea>
-
-          <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
-            <button class="btn btn-primary btn-sm" onclick="runVerification('${selectedCheckId}')">
-              Verify Remediation & Update Score
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div id="verif-result-feedback-${selectedCheckId}">
-        ${existingVerif ? renderVerifFeedbackHtml(existingVerif) : ""}
-      </div>
-    </div>
-  `;
-}
-
-/**
- * Changes the active check being verified in the Hardened Verification view.
- * @param {string} checkId - Check identifier.
- */
-function selectVerifCheck(checkId) {
-  AppState.selectedVerifCheckId = checkId;
-  renderVerificationView();
-}
-
-/**
- * Evaluates the new output pasted by user into the verification pane.
- * Validates whether the new configuration resolves the security flaw.
- * If verified secure:
- * - Updates AppState.verificationResults
- * - Overwrites AppState.results to restore score points
- * - Updates the dashboard and report
- * 
- * @param {string} checkId - Check identifier.
- */
-function runVerification(checkId) {
-  const textarea = document.getElementById(`output-textarea-verif-${checkId}`);
-  const feedback = document.getElementById(`verif-result-feedback-${checkId}`);
-  if (!textarea) return;
-
-  const newText = textarea.value;
-  if (!newText || newText.trim().length < 5) {
-    if (feedback) {
-      feedback.innerHTML = `
-        <div class="parse-error-alert">
-          Please paste the new PowerShell output obtained after running your remediation.
-        </div>
-      `;
-    }
-    return;
-  }
-
-  const analysis = SecurityAnalyzer.analyze(checkId, newText);
-  if (!analysis) {
-    if (feedback) {
-      feedback.innerHTML = `
-        <div class="parse-error-alert">
-          Unable to interpret this output. Ensure you ran the exact command <code>${SECURITY_CHECKS.find(c => c.id === checkId)?.command}</code>.
-        </div>
-      `;
-    }
-    return;
-  }
-
-  const before = AppState.results[checkId];
-  const isNowSecure = analysis.status === "secure";
-
-  AppState.verificationResults[checkId] = {
-    checkId,
-    beforeStatus: before ? before.finding : "Initial State",
-    afterStatus: analysis.finding,
-    verified: isNowSecure,
-    newResult: analysis,
-    newOutput: newText
-  };
-
-  // If verified secure, update global audit score state!
-  if (isNowSecure) {
-    AppState.results[checkId] = analysis;
-  }
-
-  if (feedback) {
-    feedback.innerHTML = renderVerifFeedbackHtml(AppState.verificationResults[checkId]);
-  }
-
-  const badge = document.getElementById("after-status-badge");
-  if (badge) {
-    badge.textContent = isNowSecure ? "Verified Secure ✅" : "Still Vulnerable ⚠️";
-    badge.className = `stat-pill ${isNowSecure ? 'risk-secure' : 'risk-danger'}`;
-  }
-}
-
-/**
- * Generates the HTML message for verification result feedback.
- * @param {object} v - Verification result record.
- * @returns {string} HTML alert markup.
- */
-function renderVerifFeedbackHtml(v) {
-  if (v.verified) {
-    return `
-      <div style="background-color: var(--secure-green-bg); border: 1px solid var(--secure-green-border); border-radius: var(--radius-md); padding: 18px; margin-top: 16px;">
-        <h4 style="color: var(--secure-green); font-size: 1.1rem; margin-bottom: 6px;">🎉 Verification Successful: System Hardened!</h4>
-        <p style="font-size: 0.9rem; color: var(--text-primary); margin-bottom: 8px;">
-          The updated PowerShell analysis confirms that the security flaw has been successfully resolved. Full score points have been restored.
-        </p>
-        <div style="font-size: 0.85rem; color: var(--text-secondary);">
-          <strong>Before:</strong> ${v.beforeStatus}<br>
-          <strong>After:</strong> ${v.afterStatus}
-        </div>
-      </div>
-    `;
-  } else {
-    return `
-      <div style="background-color: var(--danger-red-bg); border: 1px solid var(--danger-red-border); border-radius: var(--radius-md); padding: 18px; margin-top: 16px;">
-        <h4 style="color: var(--danger-red); font-size: 1.1rem; margin-bottom: 6px;">⚠️ Weakness Still Present</h4>
-        <p style="font-size: 0.9rem; color: var(--text-primary);">
-          The newly submitted output still reflects an unhardened or incomplete state. Please re-run the remediation command in an elevated PowerShell session and paste the output again.
-        </p>
-      </div>
-    `;
-  }
-}
-
-// ============================================================================
-// SECTION 8: CLIENT-SIDE CRYPTO-VERIFIED PDF REPORT EXPORT (JSPDF)
+// SECTION 7: CLIENT-SIDE CRYPTOGRAPHICALLY CERTIFIED PDF REPORT EXPORT (JSPDF)
 // ============================================================================
 /**
  * Safely loads an image asset from a URL and converts it to an optimized base64 Data URL via canvas.
@@ -2308,9 +2053,8 @@ function loadImageAsBase64(url, maxWidth = 800, maxHeight = 800) {
  * 3. Scope & Findings Summary Table: Dimension name, evaluation status, score points, finding.
  * 4. Section 1: Flaws Found & Diagnosis with CVSS risk classification and PowerShell evidence quotes.
  * 5. Section 2: Remediation Actions & Hardening Steps with actionable PowerShell scripts.
- * 6. Section 3: Hardened Verification Summary displaying before vs. after resolution proof.
- * 7. Bottom Signature Block: developer title, SecureCheck brand, and digital certification image.
- * 8. Running Headers, Page Numbers, and Legal Disclaimers across multi-page layouts.
+ * 6. Bottom Signature Block: developer title, SecureCheck brand, and digital certification image.
+ * 7. Running Headers, Page Numbers, and Legal Disclaimers across multi-page layouts.
  * 
  * @param {Event} e - Button click event.
  */
@@ -2332,7 +2076,7 @@ async function generatePdfReport(e) {
   }
 
   try {
-    // Pre-load application logo and digital sign 2
+    // Pre-load application logo and digital sign
     let [logoImgData, signImgData] = await Promise.all([
       loadImageAsBase64("/web-logo.jpg", 300, 300),
       loadImageAsBase64("/digital-sign-2-cropped.png", 600, 300)
@@ -2350,7 +2094,6 @@ async function generatePdfReport(e) {
 
     const scoreData = computeSecurityScore();
     const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    const { certId, sha: reportSha } = getReportCryptoFingerprint();
 
     const primaryColor = [15, 23, 42]; // #0f172a
     const accentColor = [14, 165, 233]; // #0ea5e9
@@ -2733,57 +2476,26 @@ async function generatePdfReport(e) {
       });
     }
 
-    // BALANCED OFFICIAL ATTESTATION & DEVELOPER SIGNATURE BLOCK
-    // Keep attestation and signature side by side with disclaimer full width below
-    const signGroupHeight = 86 + 10 + 26; // 122 pt total
-    if (y + signGroupHeight > 750) {
+    // DEVELOPER SIGNATURE BLOCK
+    const signBoxW = 180;
+    const signBoxH = 80;
+    const signBoxX = 595.28 - 40 - signBoxW; // 375.28
+
+    if (y + signBoxH + 20 > 790) {
       doc.addPage();
       y = 50;
     } else {
-      y += 12;
+      y += 16;
     }
 
-    const attestBoxW = 330;
-    const attestBoxH = 86;
-    const signBoxW = 170;
-    const signBoxH = 86;
-    const signBoxX = 595.28 - 40 - signBoxW; // 385.28
-
-    // Left Box: Assessment Attestation
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.8);
-    doc.roundedRect(40, y, attestBoxW, attestBoxH, 4, 4, "FD");
-
-    doc.setFillColor(15, 23, 42);
-    doc.roundedRect(40, y, 3.5, attestBoxH, 2, 2, "F");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Official Attestation & Compliance Stamp", 52, y + 18);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(71, 85, 105);
-    doc.text(`Certificate Serial: ${certId}`, 52, y + 33);
-    doc.text(`Attestation Fingerprint: ${reportSha}`, 52, y + 46);
-    doc.text("Assessment Engine: SecureCheck Diagnostic Verifier v2.4", 52, y + 59);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.setTextColor(5, 150, 105);
-    doc.text("Audit Attestation: DIGITALLY SEALED & VERIFIED", 52, y + 73);
-
-    // Right Box: Developer Signature
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(203, 213, 225);
     doc.setLineWidth(0.8);
     doc.roundedRect(signBoxX, y, signBoxW, signBoxH, 4, 4, "FD");
 
     if (signImgData) {
-      const maxW = 135;
-      const maxH = 40;
+      const maxW = 145;
+      const maxH = 38;
       let sW = maxW;
       let sH = (signImgData.height / signImgData.width) * sW;
       if (sH > maxH) {
@@ -2791,34 +2503,23 @@ async function generatePdfReport(e) {
         sW = (signImgData.width / signImgData.height) * sH;
       }
       const signFormat = signImgData.format || "PNG";
-      doc.addImage(signImgData.dataUrl, signFormat, signBoxX + 12, y + 7, sW, sH);
+      doc.addImage(signImgData.dataUrl, signFormat, signBoxX + 14, y + 6, sW, sH);
     } else {
       doc.setFont("helvetica", "italic");
       doc.setFontSize(8.5);
       doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-      doc.text("[digital sign 2 img]", signBoxX + 12, y + 24);
+      doc.text("[digital sign 2 img]", signBoxX + 14, y + 22);
     }
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.5);
     doc.setTextColor(17, 24, 39);
-    doc.text("devloper", signBoxX + 12, y + 58);
+    doc.text("devloper", signBoxX + 14, y + 54);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(55, 65, 81);
-    doc.text("SecureCheck", signBoxX + 12, y + 72);
-
-    // Full-Width Disclaimer below
-    y = y + attestBoxH + 10;
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(7);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    const disclaimer = doc.splitTextToSize(
-      "Disclaimer: This report is an informational security assessment based on the PowerShell output provided by the user. SecureCheck does not directly scan, modify, or control the user's computer. Users should verify recommendations before making system changes.",
-      515
-    );
-    doc.text(disclaimer, 40, y + 8);
+    doc.text("SecureCheck", signBoxX + 14, y + 68);
 
     // Add running headers on page 2+ and footer page numbers
     const pageCount = doc.internal.getNumberOfPages();
@@ -2869,20 +2570,19 @@ async function generatePdfReport(e) {
 }
 
 /**
- * Resets all session data, evaluated checks, and verification records after confirmation.
+ * Resets all session data and evaluated checks after confirmation.
  * Returns the user to the initial welcome screen.
  */
 function resetAllData() {
   if (confirm("Are you sure you want to reset all audit checks and start fresh?")) {
     AppState.results = {};
-    AppState.verificationResults = {};
     AppState.activeStepIndex = 0;
     switchView("home");
   }
 }
 
 // ============================================================================
-// SECTION 9: LIFECYCLE INITIALIZATION & GLOBAL WINDOW EXPORTS
+// SECTION 8: LIFECYCLE INITIALIZATION & GLOBAL WINDOW EXPORTS
 // ============================================================================
 /**
  * DOMContentLoaded Event Listener:
@@ -2904,8 +2604,7 @@ window.analyzeCurrentCheck = analyzeCurrentCheck;
 window.proceedToNextStep = proceedToNextStep;
 window.generatePdfReport = generatePdfReport;
 window.resetAllData = resetAllData;
-window.selectVerifCheck = selectVerifCheck;
-window.runVerification = runVerification;
 window.copyCheckCommand = copyCheckCommand;
 window.copyRemediation = copyRemediation;
 window.copyReportRemediation = copyReportRemediation;
+window.scrollAuditToTop = scrollAuditToTop;
