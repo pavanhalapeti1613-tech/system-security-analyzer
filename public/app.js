@@ -50,6 +50,10 @@ const SECURITY_CHECKS = [
     id: "firewall",
     step: 1,
     title: "Windows Firewall",
+    themeClass: "theme-firewall",
+    categoryTag: "NETWORK SHIELD",
+    icon: "🛡️",
+    accentColor: "var(--accent-cyan)",
     weight: 20,
     command: "Get-NetFirewallProfile",
     shortDesc: "Network Perimeter Defense",
@@ -113,6 +117,10 @@ DefaultOutboundAction           : Allow`,
     id: "bitlocker",
     step: 2,
     title: "BitLocker / Disk Encryption",
+    themeClass: "theme-bitlocker",
+    categoryTag: "CRYPTOGRAPHY",
+    icon: "🔒",
+    accentColor: "var(--accent-purple)",
     weight: 20,
     command: "Get-BitLockerVolume",
     shortDesc: "Data-at-Rest Protection",
@@ -134,6 +142,10 @@ Data            D:        931.51 FullyDecrypted      None       None         Dis
     id: "admin",
     step: 3,
     title: "Administrator Accounts",
+    themeClass: "theme-admins",
+    categoryTag: "LEAST PRIVILEGE",
+    icon: "👥",
+    accentColor: "var(--accent-amber)",
     weight: 15,
     command: "Get-LocalGroupMember -Group \"Administrators\"",
     shortDesc: "Privilege Separation & Least Privilege",
@@ -154,6 +166,10 @@ User        DESKTOP-PC\\TempInstaller Local`,
     id: "guest",
     step: 4,
     title: "Guest Account",
+    themeClass: "theme-guest",
+    categoryTag: "PERIMETER DEFENSE",
+    icon: "👤",
+    accentColor: "var(--accent-rose)",
     weight: 15,
     command: "Get-LocalUser -Name \"Guest\"",
     shortDesc: "Anonymous Logon Surface",
@@ -171,6 +187,10 @@ Guest True    Built-in account for guest access to the computer/domain`,
     id: "updates",
     step: 5,
     title: "Windows Updates & Patch Hygiene",
+    themeClass: "theme-updates",
+    categoryTag: "PATCH CURRENCY",
+    icon: "🔄",
+    accentColor: "var(--accent-emerald)",
     weight: 15,
     command: "Get-WindowsUpdate",
     shortDesc: "Vulnerability Patching",
@@ -192,6 +212,10 @@ DESKTOP-VULN Pending    KB5029244  420MB Windows Kernel Vulnerability Hotfix (Cr
     id: "apps",
     step: 6,
     title: "Installed Applications / Shadow IT",
+    themeClass: "theme-apps",
+    categoryTag: "APP HYGIENE",
+    icon: "📦",
+    accentColor: "var(--accent-indigo)",
     weight: 15,
     command: "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Select-Object DisplayName, DisplayVersion | Where-Object {$_.DisplayName}",
     shortDesc: "Software Inventory & Attack Surface",
@@ -1101,14 +1125,23 @@ function renderAuditStep(index) {
   const existingResult = AppState.results[check.id];
 
   container.innerHTML = `
-    <div class="audit-card" id="audit-step-card-${check.id}">
+    <div class="audit-card ${check.themeClass}" id="audit-step-card-${check.id}">
       <div class="audit-card-header">
-        <div>
-          <div class="step-number-tag">Step ${index + 1} of ${SECURITY_CHECKS.length}</div>
-          <h2 class="check-title">Security Check: ${check.title}</h2>
-          <div style="color: var(--text-secondary); font-size: 0.92rem;">${check.shortDesc}</div>
+        <div style="display: flex; align-items: flex-start; gap: 14px;">
+          <div class="feature-icon" style="width: 44px; height: 44px; font-size: 1.35rem; flex-shrink: 0; margin-top: 2px;">
+            ${check.icon}
+          </div>
+          <div>
+            <div class="step-number-tag" style="color: ${check.accentColor}; display: flex; align-items: center; gap: 8px;">
+              <span>STEP ${index + 1} OF ${SECURITY_CHECKS.length}</span>
+              <span style="opacity: 0.5;">•</span>
+              <span>${check.categoryTag}</span>
+            </div>
+            <h2 class="check-title">${check.title}</h2>
+            <div style="color: var(--text-secondary); font-size: 0.92rem;">${check.shortDesc}</div>
+          </div>
         </div>
-        <div class="check-weight-badge">Weight: ${check.weight} Points</div>
+        <div class="check-weight-badge" style="border-color: ${check.accentColor}; color: ${check.accentColor};">Weight: ${check.weight} Points</div>
       </div>
 
       <div class="audit-card-body">
@@ -1193,8 +1226,19 @@ function renderAuditStep(index) {
               <div class="output-helper-bar">
                 <div class="output-helper-title">Paste it below:</div>
                 <div class="output-action-pills">
-                  <button class="btn-sample-pill" onclick="clearOutputText('${check.id}')">
-                    🗑️ Clear
+                  <button type="button" class="btn-paste" id="btn-paste-${check.id}" onclick="pasteOutputText('${check.id}')" title="Paste from clipboard">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                    </svg>
+                    <span>Paste</span>
+                  </button>
+                  <button type="button" class="btn-clear" id="btn-clear-${check.id}" onclick="clearOutputText('${check.id}')" title="Clear text">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <span>Clear</span>
                   </button>
                 </div>
               </div>
@@ -1399,6 +1443,133 @@ function copyReportRemediation(checkId, btnId) {
   const res = AppState.results[checkId];
   if (res && res.remediationCmd) {
     copyCommand(res.remediationCmd, btnId);
+  }
+}
+
+// Active check tracking for quick paste modal
+let currentQuickPasteCheckId = null;
+
+/**
+ * Opens the quick paste modal dialog for the specified check.
+ * @param {string} checkId - Check identifier.
+ */
+function openQuickPasteModal(checkId) {
+  currentQuickPasteCheckId = checkId;
+  const modal = document.getElementById("quick-paste-modal");
+  const input = document.getElementById("quick-paste-input");
+  if (modal && input) {
+    input.value = "";
+    modal.style.display = "flex";
+    setTimeout(() => {
+      input.focus();
+    }, 100);
+  }
+}
+
+/**
+ * Closes the quick paste modal dialog.
+ */
+function closeQuickPasteModal() {
+  const modal = document.getElementById("quick-paste-modal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+  currentQuickPasteCheckId = null;
+}
+
+/**
+ * Inserts content from quick paste modal into the target check's textarea and analyzes it.
+ */
+function submitQuickPasteModal() {
+  if (!currentQuickPasteCheckId) return;
+  const input = document.getElementById("quick-paste-input");
+  const targetTextarea = document.getElementById(`output-textarea-${currentQuickPasteCheckId}`);
+  const pasteBtn = document.getElementById(`btn-paste-${currentQuickPasteCheckId}`);
+
+  if (input && targetTextarea && input.value.trim().length > 0) {
+    targetTextarea.value = input.value;
+    onOutputChanged(currentQuickPasteCheckId);
+    targetTextarea.focus();
+
+    if (pasteBtn) {
+      const origHtml = pasteBtn.innerHTML;
+      pasteBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>Pasted!</span>
+      `;
+      pasteBtn.classList.add("copied");
+      setTimeout(() => {
+        pasteBtn.innerHTML = origHtml;
+        pasteBtn.classList.remove("copied");
+      }, 1500);
+    }
+  }
+
+  closeQuickPasteModal();
+}
+
+/**
+ * Pastes clipboard contents directly into the current check's output textarea.
+ * Attempts direct clipboard API read, execCommand paste, and opens an instant paste modal if blocked.
+ * @param {string} checkId - Check identifier.
+ */
+async function pasteOutputText(checkId) {
+  const textarea = document.getElementById(`output-textarea-${checkId}`);
+  const pasteBtn = document.getElementById(`btn-paste-${checkId}`);
+  if (!textarea) return;
+
+  let pasted = false;
+
+  // Strategy 1: Modern navigator.clipboard.readText()
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.readText === "function") {
+      const clipText = await navigator.clipboard.readText();
+      if (clipText && clipText.trim().length > 0) {
+        textarea.value = clipText;
+        onOutputChanged(checkId);
+        textarea.focus();
+        pasted = true;
+      }
+    }
+  } catch (err) {
+    console.warn("Async clipboard read was blocked by browser sandbox/permissions:", err);
+  }
+
+  // Strategy 2: Focus & document.execCommand('paste')
+  if (!pasted) {
+    try {
+      textarea.focus();
+      textarea.select();
+      const execSuccess = document.execCommand("paste");
+      if (execSuccess && textarea.value.trim().length > 0) {
+        onOutputChanged(checkId);
+        pasted = true;
+      }
+    } catch (_) {}
+  }
+
+  // Visual confirmation or fallback to instant quick-paste dialog
+  if (pasteBtn) {
+    const origHtml = pasteBtn.innerHTML;
+    if (pasted) {
+      pasteBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>Pasted!</span>
+      `;
+      pasteBtn.classList.add("copied");
+      setTimeout(() => {
+        pasteBtn.innerHTML = origHtml;
+        pasteBtn.classList.remove("copied");
+      }, 1500);
+    } else {
+      // If browser security strictly restricts automated programmatic clipboard reading,
+      // seamlessly open the quick paste modal dialog so user can directly paste with 1-click insert
+      openQuickPasteModal(checkId);
+    }
   }
 }
 
@@ -1749,19 +1920,24 @@ function renderDashboard() {
     }
 
     checksGridHtml += `
-      <div class="check-status-card">
+      <div class="check-status-card ${c.themeClass}">
         <div class="check-status-top">
-          <div>
-            <div class="check-status-title">${c.title}</div>
-            <div style="font-size: 0.78rem; color: var(--text-muted);">${c.shortDesc}</div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="check-status-icon" style="width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.15rem; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-cyber); flex-shrink: 0;">
+              ${c.icon}
+            </div>
+            <div>
+              <div class="check-status-title">${c.title}</div>
+              <div style="font-size: 0.74rem; color: var(--text-muted); font-family: var(--font-mono); letter-spacing: 0.03em;">${c.categoryTag} • ${c.shortDesc}</div>
+            </div>
           </div>
           ${statusPill}
         </div>
         <div class="check-status-desc">${findingText}</div>
         <div class="check-status-footer">
-          <span style="color: var(--text-muted);">Score Contribution: <strong>${scoreBadge}</strong></span>
+          <span style="color: var(--text-muted);">Score Contribution: <strong style="color: ${c.accentColor};">${scoreBadge}</strong></span>
           <button class="btn btn-secondary btn-sm" onclick="goToStep(${c.step - 1}); switchView('audit');">
-            Inspect / Re-test
+            Inspect / Re-test ➔
           </button>
         </div>
       </div>
@@ -1793,10 +1969,10 @@ function renderDashboard() {
         <div class="risk-summary-text">${scoreData.riskSummary}</div>
 
         <div class="stats-pill-row">
-          <div class="stat-pill">🟢 Secure Checks: <strong>${scoreData.secureCount}</strong></div>
-          <div class="stat-pill">🟡 Needs Attention: <strong>${scoreData.warningCount}</strong></div>
-          <div class="stat-pill">🔴 High-Risk Findings: <strong>${scoreData.dangerCount}</strong></div>
-          <div class="stat-pill">⚪ Skipped (Not Assessed): <strong>${scoreData.skippedCount}</strong></div>
+          <div class="stat-pill stat-pill-secure">🟢 Secure Checks: <strong>${scoreData.secureCount}</strong></div>
+          <div class="stat-pill stat-pill-warning">🟡 Needs Attention: <strong>${scoreData.warningCount}</strong></div>
+          <div class="stat-pill stat-pill-danger">🔴 High-Risk Findings: <strong>${scoreData.dangerCount}</strong></div>
+          <div class="stat-pill stat-pill-skipped">⚪ Skipped (Not Assessed): <strong>${scoreData.skippedCount}</strong></div>
         </div>
 
         <div class="dashboard-actions-row">
@@ -1869,15 +2045,18 @@ function renderReport() {
       const severityColor = result.severity === "High" ? "var(--danger-red)" : "var(--warning-yellow)";
 
       flawsHtml += `
-        <div class="flaw-item-card">
+        <div class="flaw-item-card ${check.themeClass}">
           <div class="flaw-header">
-            <div class="flaw-title">${idx + 1}. ${result.finding}</div>
+            <div class="flaw-title" style="display: flex; align-items: center; gap: 8px;">
+              <span>${check.icon}</span>
+              <span>${idx + 1}. ${result.finding}</span>
+            </div>
             <span class="severity-tag" style="border-color: ${severityColor}; color: ${severityColor};">
               ${result.severity} (CVSS: ${result.cvss})
             </span>
           </div>
           <div class="flaw-body-grid">
-            <div><strong>Audit Scope:</strong> ${check.title} (${check.command})</div>
+            <div><strong>Audit Scope:</strong> <span style="color: ${check.accentColor}; font-weight: 700;">${check.title}</span> (${check.command})</div>
             <div><strong>Diagnosis / Explanation:</strong> ${result.whatWeFound}</div>
             <div><strong>Vulnerability Risk:</strong> ${result.whyItMatters}</div>
             <div>
@@ -1901,8 +2080,11 @@ function renderReport() {
     remediations.forEach((item, idx) => {
       const { check, result } = item;
       remediationHtml += `
-        <div class="remediation-item-card">
-          <div class="remediation-title">Action #${idx + 1}: ${check.title} Remediation</div>
+        <div class="remediation-item-card ${check.themeClass}">
+          <div class="remediation-title" style="display: flex; align-items: center; gap: 8px; color: ${check.accentColor};">
+            <span>${check.icon}</span>
+            <span>Action #${idx + 1}: ${check.title} Remediation</span>
+          </div>
           <p style="font-size: 0.92rem; color: var(--text-secondary); margin-bottom: 10px;">
             <strong>Recommended Fix:</strong> ${result.recommendedAction}
           </p>
@@ -2616,7 +2798,7 @@ function initOpeningAnimation(isReplay = false) {
 
   if (pBar) pBar.style.width = "0%";
   if (pPct) pPct.textContent = "0%";
-  if (pLabel) pLabel.textContent = "INITIALIZING SECURE ENVIRONMENT...";
+  if (pLabel) pLabel.textContent = "INITIALIZING SECURE AUDIT ENGINE...";
   if (line1) line1.classList.remove("revealed");
   if (line2) line2.classList.remove("revealed");
   if (line3) line3.classList.remove("revealed");
@@ -2735,6 +2917,7 @@ window.switchView = switchView;
 window.goToStep = goToStep;
 window.copyCommand = copyCommand;
 window.clearOutputText = clearOutputText;
+window.pasteOutputText = pasteOutputText;
 window.onOutputChanged = onOutputChanged;
 window.skipCheck = skipCheck;
 window.analyzeCurrentCheck = analyzeCurrentCheck;
@@ -2744,6 +2927,9 @@ window.resetAllData = resetAllData;
 window.copyCheckCommand = copyCheckCommand;
 window.copyRemediation = copyRemediation;
 window.copyReportRemediation = copyReportRemediation;
+window.openQuickPasteModal = openQuickPasteModal;
+window.closeQuickPasteModal = closeQuickPasteModal;
+window.submitQuickPasteModal = submitQuickPasteModal;
 window.scrollAuditToTop = scrollAuditToTop;
 window.initOpeningAnimation = initOpeningAnimation;
 window.dismissOpeningAnimation = dismissOpeningAnimation;
