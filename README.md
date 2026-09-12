@@ -1,4 +1,4 @@
-# 🛡️ securecheck
+# 🛡️ SecurCheck
 
 A web-based security analysis tool designed to help users understand the security status of their system through a simple and user-friendly interface.
 
@@ -126,7 +126,7 @@ This project is intended for **security-awareness, and authorized testing purpos
 
 The results provided by the analyzer should not be considered a complete security audit or a guarantee that a system is secure. Always use security tools responsibly and only analyze systems you own or have permission to test.
 
-## 👨‍💻 Developer
+## 👨‍💻 Founder and Developer SecureCheck
 
 ### Pavan Halapeti
 
