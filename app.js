@@ -50,6 +50,10 @@ const SECURITY_CHECKS = [
     id: "firewall",
     step: 1,
     title: "Windows Firewall",
+    themeClass: "theme-firewall",
+    categoryTag: "NETWORK SHIELD",
+    icon: "🛡️",
+    accentColor: "var(--accent-cyan)",
     weight: 20,
     command: "Get-NetFirewallProfile",
     shortDesc: "Network Perimeter Defense",
@@ -113,6 +117,10 @@ DefaultOutboundAction           : Allow`,
     id: "bitlocker",
     step: 2,
     title: "BitLocker / Disk Encryption",
+    themeClass: "theme-bitlocker",
+    categoryTag: "CRYPTOGRAPHY",
+    icon: "🔒",
+    accentColor: "var(--accent-purple)",
     weight: 20,
     command: "Get-BitLockerVolume",
     shortDesc: "Data-at-Rest Protection",
@@ -134,6 +142,10 @@ Data            D:        931.51 FullyDecrypted      None       None         Dis
     id: "admin",
     step: 3,
     title: "Administrator Accounts",
+    themeClass: "theme-admins",
+    categoryTag: "LEAST PRIVILEGE",
+    icon: "👥",
+    accentColor: "var(--accent-amber)",
     weight: 15,
     command: "Get-LocalGroupMember -Group \"Administrators\"",
     shortDesc: "Privilege Separation & Least Privilege",
@@ -154,6 +166,10 @@ User        DESKTOP-PC\\TempInstaller Local`,
     id: "guest",
     step: 4,
     title: "Guest Account",
+    themeClass: "theme-guest",
+    categoryTag: "PERIMETER DEFENSE",
+    icon: "👤",
+    accentColor: "var(--accent-rose)",
     weight: 15,
     command: "Get-LocalUser -Name \"Guest\"",
     shortDesc: "Anonymous Logon Surface",
@@ -171,6 +187,10 @@ Guest True    Built-in account for guest access to the computer/domain`,
     id: "updates",
     step: 5,
     title: "Windows Updates & Patch Hygiene",
+    themeClass: "theme-updates",
+    categoryTag: "PATCH CURRENCY",
+    icon: "🔄",
+    accentColor: "var(--accent-emerald)",
     weight: 15,
     command: "Get-WindowsUpdate",
     shortDesc: "Vulnerability Patching",
@@ -192,6 +212,10 @@ DESKTOP-VULN Pending    KB5029244  420MB Windows Kernel Vulnerability Hotfix (Cr
     id: "apps",
     step: 6,
     title: "Installed Applications / Shadow IT",
+    themeClass: "theme-apps",
+    categoryTag: "APP HYGIENE",
+    icon: "📦",
+    accentColor: "var(--accent-indigo)",
     weight: 15,
     command: "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Select-Object DisplayName, DisplayVersion | Where-Object {$_.DisplayName}",
     shortDesc: "Software Inventory & Attack Surface",
@@ -1101,14 +1125,23 @@ function renderAuditStep(index) {
   const existingResult = AppState.results[check.id];
 
   container.innerHTML = `
-    <div class="audit-card" id="audit-step-card-${check.id}">
+    <div class="audit-card ${check.themeClass}" id="audit-step-card-${check.id}">
       <div class="audit-card-header">
-        <div>
-          <div class="step-number-tag">Step ${index + 1} of ${SECURITY_CHECKS.length}</div>
-          <h2 class="check-title">Security Check: ${check.title}</h2>
-          <div style="color: var(--text-secondary); font-size: 0.92rem;">${check.shortDesc}</div>
+        <div style="display: flex; align-items: flex-start; gap: 14px;">
+          <div class="feature-icon" style="width: 44px; height: 44px; font-size: 1.35rem; flex-shrink: 0; margin-top: 2px;">
+            ${check.icon}
+          </div>
+          <div>
+            <div class="step-number-tag" style="color: ${check.accentColor}; display: flex; align-items: center; gap: 8px;">
+              <span>STEP ${index + 1} OF ${SECURITY_CHECKS.length}</span>
+              <span style="opacity: 0.5;">•</span>
+              <span>${check.categoryTag}</span>
+            </div>
+            <h2 class="check-title">${check.title}</h2>
+            <div style="color: var(--text-secondary); font-size: 0.92rem;">${check.shortDesc}</div>
+          </div>
         </div>
-        <div class="check-weight-badge">Weight: ${check.weight} Points</div>
+        <div class="check-weight-badge" style="border-color: ${check.accentColor}; color: ${check.accentColor};">Weight: ${check.weight} Points</div>
       </div>
 
       <div class="audit-card-body">
@@ -1749,19 +1782,24 @@ function renderDashboard() {
     }
 
     checksGridHtml += `
-      <div class="check-status-card">
+      <div class="check-status-card ${c.themeClass}">
         <div class="check-status-top">
-          <div>
-            <div class="check-status-title">${c.title}</div>
-            <div style="font-size: 0.78rem; color: var(--text-muted);">${c.shortDesc}</div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="check-status-icon" style="width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.15rem; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-cyber); flex-shrink: 0;">
+              ${c.icon}
+            </div>
+            <div>
+              <div class="check-status-title">${c.title}</div>
+              <div style="font-size: 0.74rem; color: var(--text-muted); font-family: var(--font-mono); letter-spacing: 0.03em;">${c.categoryTag} • ${c.shortDesc}</div>
+            </div>
           </div>
           ${statusPill}
         </div>
         <div class="check-status-desc">${findingText}</div>
         <div class="check-status-footer">
-          <span style="color: var(--text-muted);">Score Contribution: <strong>${scoreBadge}</strong></span>
+          <span style="color: var(--text-muted);">Score Contribution: <strong style="color: ${c.accentColor};">${scoreBadge}</strong></span>
           <button class="btn btn-secondary btn-sm" onclick="goToStep(${c.step - 1}); switchView('audit');">
-            Inspect / Re-test
+            Inspect / Re-test ➔
           </button>
         </div>
       </div>
@@ -1793,10 +1831,10 @@ function renderDashboard() {
         <div class="risk-summary-text">${scoreData.riskSummary}</div>
 
         <div class="stats-pill-row">
-          <div class="stat-pill">🟢 Secure Checks: <strong>${scoreData.secureCount}</strong></div>
-          <div class="stat-pill">🟡 Needs Attention: <strong>${scoreData.warningCount}</strong></div>
-          <div class="stat-pill">🔴 High-Risk Findings: <strong>${scoreData.dangerCount}</strong></div>
-          <div class="stat-pill">⚪ Skipped (Not Assessed): <strong>${scoreData.skippedCount}</strong></div>
+          <div class="stat-pill stat-pill-secure">🟢 Secure Checks: <strong>${scoreData.secureCount}</strong></div>
+          <div class="stat-pill stat-pill-warning">🟡 Needs Attention: <strong>${scoreData.warningCount}</strong></div>
+          <div class="stat-pill stat-pill-danger">🔴 High-Risk Findings: <strong>${scoreData.dangerCount}</strong></div>
+          <div class="stat-pill stat-pill-skipped">⚪ Skipped (Not Assessed): <strong>${scoreData.skippedCount}</strong></div>
         </div>
 
         <div class="dashboard-actions-row">
@@ -1869,15 +1907,18 @@ function renderReport() {
       const severityColor = result.severity === "High" ? "var(--danger-red)" : "var(--warning-yellow)";
 
       flawsHtml += `
-        <div class="flaw-item-card">
+        <div class="flaw-item-card ${check.themeClass}">
           <div class="flaw-header">
-            <div class="flaw-title">${idx + 1}. ${result.finding}</div>
+            <div class="flaw-title" style="display: flex; align-items: center; gap: 8px;">
+              <span>${check.icon}</span>
+              <span>${idx + 1}. ${result.finding}</span>
+            </div>
             <span class="severity-tag" style="border-color: ${severityColor}; color: ${severityColor};">
               ${result.severity} (CVSS: ${result.cvss})
             </span>
           </div>
           <div class="flaw-body-grid">
-            <div><strong>Audit Scope:</strong> ${check.title} (${check.command})</div>
+            <div><strong>Audit Scope:</strong> <span style="color: ${check.accentColor}; font-weight: 700;">${check.title}</span> (${check.command})</div>
             <div><strong>Diagnosis / Explanation:</strong> ${result.whatWeFound}</div>
             <div><strong>Vulnerability Risk:</strong> ${result.whyItMatters}</div>
             <div>
@@ -1901,8 +1942,11 @@ function renderReport() {
     remediations.forEach((item, idx) => {
       const { check, result } = item;
       remediationHtml += `
-        <div class="remediation-item-card">
-          <div class="remediation-title">Action #${idx + 1}: ${check.title} Remediation</div>
+        <div class="remediation-item-card ${check.themeClass}">
+          <div class="remediation-title" style="display: flex; align-items: center; gap: 8px; color: ${check.accentColor};">
+            <span>${check.icon}</span>
+            <span>Action #${idx + 1}: ${check.title} Remediation</span>
+          </div>
           <p style="font-size: 0.92rem; color: var(--text-secondary); margin-bottom: 10px;">
             <strong>Recommended Fix:</strong> ${result.recommendedAction}
           </p>
@@ -2582,15 +2626,152 @@ function resetAllData() {
 }
 
 // ============================================================================
-// SECTION 8: LIFECYCLE INITIALIZATION & GLOBAL WINDOW EXPORTS
+// SECTION 8: WEBSITE OPENING ANIMATION & LIFECYCLE INITIALIZATION
 // ============================================================================
+let openingAnimationTimer = null;
+let isOpeningAnimationActive = false;
+
+/**
+ * Initializes and plays the cyber website opening animation.
+ * Features progress bar loading, terminal status lines, and sound/visual transitions.
+ */
+function initOpeningAnimation(isReplay = false) {
+  const overlay = document.getElementById("site-opening-overlay");
+  if (!overlay) return;
+
+  if (openingAnimationTimer) {
+    cancelAnimationFrame(openingAnimationTimer);
+    openingAnimationTimer = null;
+  }
+
+  isOpeningAnimationActive = true;
+  document.body.classList.add("site-animating");
+  document.body.classList.remove("site-entered");
+
+  overlay.classList.remove("closing", "hidden");
+  overlay.setAttribute("aria-hidden", "false");
+
+  const pBar = document.getElementById("openingProgressBar");
+  const pPct = document.getElementById("openingProgressPct");
+  const pLabel = document.getElementById("openingProgressLabel");
+  const line1 = document.getElementById("openingTermLine1");
+  const line2 = document.getElementById("openingTermLine2");
+  const line3 = document.getElementById("openingTermLine3");
+
+  if (pBar) pBar.style.width = "0%";
+  if (pPct) pPct.textContent = "0%";
+  if (pLabel) pLabel.textContent = "INITIALIZING SECURE AUDIT ENGINE...";
+  if (line1) line1.classList.remove("revealed");
+  if (line2) line2.classList.remove("revealed");
+  if (line3) line3.classList.remove("revealed");
+
+  const startTime = performance.now();
+  const duration = 1500; // 1.5 seconds smooth intro
+
+  function frame(now) {
+    if (!isOpeningAnimationActive) return;
+    const elapsed = now - startTime;
+    const progress = Math.min(1, elapsed / duration);
+    const pct = Math.floor(progress * 100);
+
+    if (pBar) pBar.style.width = `${pct}%`;
+    if (pPct) pPct.textContent = `${pct}%`;
+
+    // Progressive terminal diagnostics logs
+    if (progress >= 0.15 && line1) line1.classList.add("revealed");
+    if (progress >= 0.45 && line2) line2.classList.add("revealed");
+    if (progress >= 0.75 && line3) line3.classList.add("revealed");
+
+    if (progress >= 0.45 && progress < 0.85 && pLabel) {
+      pLabel.textContent = "VERIFYING POWERSHELL HEURISTICS...";
+    } else if (progress >= 0.85 && pLabel) {
+      pLabel.textContent = "ALL DEFENSE MODULES OPERATIONAL";
+    }
+
+    if (progress < 1) {
+      openingAnimationTimer = requestAnimationFrame(frame);
+    } else {
+      setTimeout(() => {
+        dismissOpeningAnimation();
+      }, 160);
+    }
+  }
+
+  openingAnimationTimer = requestAnimationFrame(frame);
+
+  // Safety fallback after 3.2s to guarantee the user is never locked out
+  setTimeout(() => {
+    if (isOpeningAnimationActive) {
+      dismissOpeningAnimation();
+    }
+  }, 3200);
+}
+
+/**
+ * Dismisses the opening animation and transitions smoothly into the main website.
+ */
+function dismissOpeningAnimation() {
+  if (!isOpeningAnimationActive) return;
+  isOpeningAnimationActive = false;
+
+  if (openingAnimationTimer) {
+    cancelAnimationFrame(openingAnimationTimer);
+    openingAnimationTimer = null;
+  }
+
+  const overlay = document.getElementById("site-opening-overlay");
+  const pBar = document.getElementById("openingProgressBar");
+  const pPct = document.getElementById("openingProgressPct");
+  const pLabel = document.getElementById("openingProgressLabel");
+  const line1 = document.getElementById("openingTermLine1");
+  const line2 = document.getElementById("openingTermLine2");
+  const line3 = document.getElementById("openingTermLine3");
+
+  if (pBar) pBar.style.width = "100%";
+  if (pPct) pPct.textContent = "100%";
+  if (pLabel) pLabel.textContent = "SYSTEM READY • ENTERING WORKSPACE";
+  if (line1) line1.classList.add("revealed");
+  if (line2) line2.classList.add("revealed");
+  if (line3) line3.classList.add("revealed");
+
+  document.body.classList.remove("site-animating");
+  document.body.classList.add("site-entered");
+
+  if (overlay) {
+    overlay.classList.add("closing");
+    overlay.setAttribute("aria-hidden", "true");
+    setTimeout(() => {
+      overlay.classList.add("hidden");
+    }, 450);
+  }
+}
+
+/**
+ * Global trigger to replay the opening animation from UI button or debug console.
+ */
+function triggerOpeningAnimation() {
+  initOpeningAnimation(true);
+}
+
 /**
  * DOMContentLoaded Event Listener:
- * Fires when document structure is ready, boots up the default home view.
+ * Fires when document structure is ready, boots up the default home view and opening animation.
  */
 document.addEventListener("DOMContentLoaded", () => {
   // Render initial homepage
   switchView("home");
+
+  // Launch website opening animation
+  initOpeningAnimation();
+
+  // Handle keyboard shortcut (Esc / Space / Enter) to skip opening animation
+  window.addEventListener("keydown", (e) => {
+    if (isOpeningAnimationActive) {
+      if (e.key === "Escape" || e.key === " " || e.key === "Enter") {
+        dismissOpeningAnimation();
+      }
+    }
+  });
 });
 
 // Expose functions globally to window so inline HTML onclick and oninput handlers can invoke them
@@ -2608,3 +2789,6 @@ window.copyCheckCommand = copyCheckCommand;
 window.copyRemediation = copyRemediation;
 window.copyReportRemediation = copyReportRemediation;
 window.scrollAuditToTop = scrollAuditToTop;
+window.initOpeningAnimation = initOpeningAnimation;
+window.dismissOpeningAnimation = dismissOpeningAnimation;
+window.triggerOpeningAnimation = triggerOpeningAnimation;

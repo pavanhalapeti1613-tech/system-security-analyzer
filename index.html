@@ -12,13 +12,51 @@
 
     <!-- Pure CSS stylesheet -->
     <link rel="icon" type="image/jpeg" href="/web-logo.jpg" />
-    <link rel="stylesheet" href="/style.css?v=2.6" />
+    <link rel="stylesheet" href="/style.css?v=2.7" />
 
     <!-- CDN for Client-Side PDF Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   </head>
-  <body>
+  <body class="site-animating">
+    <!-- Website Opening Animation Overlay -->
+    <div id="site-opening-overlay" class="site-opening-overlay" role="dialog" aria-modal="true" aria-label="System Initializing" onclick="dismissOpeningAnimation()">
+      <div class="opening-ambient-glow" aria-hidden="true"></div>
+      <div class="opening-grid-overlay" aria-hidden="true"></div>
+      <div class="opening-scanline" aria-hidden="true"></div>
+
+      <div class="opening-modal-content" onclick="event.stopPropagation()">
+        <!-- Shield Logo with Radar Scan -->
+        <div class="opening-logo-container">
+          <div class="opening-orbit-ring" aria-hidden="true"></div>
+          <div class="opening-radar-sweep" aria-hidden="true"></div>
+          <div class="opening-logo-card">
+            <img src="/web-logo.jpg" alt="SecureCheck" class="opening-logo-img" />
+          </div>
+        </div>
+
+        <!-- Typography -->
+        <div class="opening-brand-wrapper">
+          <h1 class="opening-title">Secure<span style="color: var(--accent-cyan);">Check</span></h1>
+          <div class="opening-subtitle">
+            <span>SECURE YOUR WINDOWS</span>
+          </div>
+        </div>
+
+        <!-- Progress Tracker -->
+        <div class="opening-progress-section">
+          <div class="opening-progress-info">
+            <span class="opening-progress-label" id="openingProgressLabel">INITIALIZING SECURE AUDIT ENGINE...</span>
+            <span class="opening-progress-pct" id="openingProgressPct">0%</span>
+          </div>
+          <div class="opening-progress-track">
+            <div class="opening-progress-bar" id="openingProgressBar"></div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Top Navigation Bar -->
     <header class="navbar" id="main-header">
       <div class="container">
@@ -70,41 +108,44 @@
             </span>
           </div>
 
-          <h1 class="hero-title" id="hero-main-title">
-           SECURE CHECK
+          <h1 class="hero-title" id="hero-title-text">
+            SECURE CHECK
           </h1>
 
           <p class="hero-subtitle" id="hero-subtitle-text">
-            Understand your Windows security in simple terms.
+            Enterprise-grade cyber posture analysis for your Windows workstation. Simple, clear, and actionable.
           </p>
 
           <!-- Privacy and Reassurance Banner -->
           <div class="hero-disclaimer-box" id="hero-disclaimer-box">
             <div class="hero-disclaimer-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
             </div>
             <div class="hero-disclaimer-text">
-              <strong>Safe, Non-Intrusive Cybersecurity Assessment:</strong><br>
-              SecureCheck does not directly access your computer. You run safe PowerShell commands yourself and paste the results here for analysis. All parsing is executed deterministically right in your browser.
+              <strong>Your Data Stays on Your Machine:</strong> We do not ask for or collect any personal information, and your outputs are never sent to external servers. All checks run locally via native PowerShell commands that you execute and inspect yourself.
             </div>
           </div>
 
-          <!-- Main CTA Button -->
+          <!-- Main CTA Buttons -->
           <div class="hero-cta-group" id="hero-cta-group">
             <button class="btn btn-primary btn-lg" id="btn-start-check" onclick="switchView('audit')">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               Start Security Check
             </button>
+
           </div>
         </div>
 
-        <!-- 6 Core Security Dimensions Grid -->
-        <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 20px;">Core Security Checks Included</h2>
+        <!-- 6 Core Security Dimensions Grid with Chromatic Themes -->
+        <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 20px; font-family: var(--font-mono); color: #fff; display: flex; align-items: center; gap: 10px;">
+          <span style="color: var(--accent-cyan);">⚡</span> Core Security Dimensions Evaluated
+        </h2>
         <div class="features-grid" id="homepage-features-grid">
-          <div class="feature-card" id="feature-card-firewall">
+          <div class="feature-card theme-firewall" id="feature-card-firewall">
             <div class="feature-icon-header">
               <div class="feature-icon">🛡️</div>
               <div class="feature-title">1. Windows Firewall</div>
+              <span class="feature-tag-pill">NETWORK SHIELD</span>
             </div>
             <div class="feature-desc">
               Checks whether Domain, Private, and Public network firewall profiles are actively shielding incoming ports against unauthorized scanning and exploitation.
@@ -112,10 +153,11 @@
             <code class="feature-command-badge">Get-NetFirewallProfile</code>
           </div>
 
-          <div class="feature-card" id="feature-card-bitlocker">
+          <div class="feature-card theme-bitlocker" id="feature-card-bitlocker">
             <div class="feature-icon-header">
               <div class="feature-icon">🔒</div>
-              <div class="feature-title">2. BitLocker / Disk Encryption</div>
+              <div class="feature-title">2. BitLocker Encryption</div>
+              <span class="feature-tag-pill">CRYPTOGRAPHY</span>
             </div>
             <div class="feature-desc">
               Analyzes primary system drive (C:) encryption status to confirm that sensitive files are protected from offline extraction if stolen.
@@ -123,10 +165,11 @@
             <code class="feature-command-badge">Get-BitLockerVolume</code>
           </div>
 
-          <div class="feature-card" id="feature-card-admins">
+          <div class="feature-card theme-admins" id="feature-card-admins">
             <div class="feature-icon-header">
               <div class="feature-icon">👥</div>
-              <div class="feature-title">3. Administrator Accounts</div>
+              <div class="feature-title">3. Admin Accounts</div>
+              <span class="feature-tag-pill">LEAST PRIVILEGE</span>
             </div>
             <div class="feature-desc">
               Evaluates privileged accounts against the Principle of Least Privilege to minimize attack surface from credential compromise and ransomware.
@@ -134,10 +177,11 @@
             <code class="feature-command-badge">Get-LocalGroupMember -Group "Administrators"</code>
           </div>
 
-          <div class="feature-card" id="feature-card-guest">
+          <div class="feature-card theme-guest" id="feature-card-guest">
             <div class="feature-icon-header">
               <div class="feature-icon">👤</div>
               <div class="feature-title">4. Guest Account</div>
+              <span class="feature-tag-pill">PERIMETER DEFENSE</span>
             </div>
             <div class="feature-desc">
               Ensures the anonymous built-in Guest account is disabled to prevent passwordless, unauthenticated workstation access.
@@ -145,10 +189,11 @@
             <code class="feature-command-badge">Get-LocalUser -Name "Guest"</code>
           </div>
 
-          <div class="feature-card" id="feature-card-updates">
+          <div class="feature-card theme-updates" id="feature-card-updates">
             <div class="feature-icon-header">
               <div class="feature-icon">🔄</div>
               <div class="feature-title">5. Windows Updates</div>
+              <span class="feature-tag-pill">PATCH CURRENCY</span>
             </div>
             <div class="feature-desc">
               Inspects operating system patch currency to ensure known security flaws and zero-day kernel exploits are addressed.
@@ -156,10 +201,11 @@
             <code class="feature-command-badge">Get-WindowsUpdate</code>
           </div>
 
-          <div class="feature-card" id="feature-card-apps">
+          <div class="feature-card theme-apps" id="feature-card-apps">
             <div class="feature-icon-header">
               <div class="feature-icon">📦</div>
-              <div class="feature-title">6. Shadow IT & Applications</div>
+              <div class="feature-title">6. Shadow IT & Apps</div>
+              <span class="feature-tag-pill">APP HYGIENE</span>
             </div>
             <div class="feature-desc">
               Inventories installed software to highlight unmanaged remote desktop tools, obsolete runtimes, and potentially unnecessary utilities.
@@ -293,7 +339,6 @@
               Windows workstation security analyzer. Translates native PowerShell audit commands into clear risk diagnoses and step-by-step remediation procedures.
             </p>
             <div class="footer-privacy-badge">
-              <span class="pulse-dot-green"></span>
               100% Client-Side • Zero System Access
             </div>
           </div>
@@ -307,13 +352,13 @@
           <div class="footer-copy">
             <span>Built for cybersecurity awareness and workstation hardening.</span>
             <br>
-            © 2026 SecureCheck – secure your windows. All rights are reserved 
+            © 2026 SecureCheck – secure your windows. All rights are reserved
           </div>
         </div>
       </div>
     </footer>
 
     <!-- Vanilla JavaScript Core Script -->
-    <script src="/app.js?v=2.7"></script>
+    <script src="/app.js?v=2.8"></script>
   </body>
 </html>

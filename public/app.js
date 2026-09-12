@@ -2582,15 +2582,152 @@ function resetAllData() {
 }
 
 // ============================================================================
-// SECTION 8: LIFECYCLE INITIALIZATION & GLOBAL WINDOW EXPORTS
+// SECTION 8: WEBSITE OPENING ANIMATION & LIFECYCLE INITIALIZATION
 // ============================================================================
+let openingAnimationTimer = null;
+let isOpeningAnimationActive = false;
+
+/**
+ * Initializes and plays the cyber website opening animation.
+ * Features progress bar loading, terminal status lines, and sound/visual transitions.
+ */
+function initOpeningAnimation(isReplay = false) {
+  const overlay = document.getElementById("site-opening-overlay");
+  if (!overlay) return;
+
+  if (openingAnimationTimer) {
+    cancelAnimationFrame(openingAnimationTimer);
+    openingAnimationTimer = null;
+  }
+
+  isOpeningAnimationActive = true;
+  document.body.classList.add("site-animating");
+  document.body.classList.remove("site-entered");
+
+  overlay.classList.remove("closing", "hidden");
+  overlay.setAttribute("aria-hidden", "false");
+
+  const pBar = document.getElementById("openingProgressBar");
+  const pPct = document.getElementById("openingProgressPct");
+  const pLabel = document.getElementById("openingProgressLabel");
+  const line1 = document.getElementById("openingTermLine1");
+  const line2 = document.getElementById("openingTermLine2");
+  const line3 = document.getElementById("openingTermLine3");
+
+  if (pBar) pBar.style.width = "0%";
+  if (pPct) pPct.textContent = "0%";
+  if (pLabel) pLabel.textContent = "INITIALIZING SECURE ENVIRONMENT...";
+  if (line1) line1.classList.remove("revealed");
+  if (line2) line2.classList.remove("revealed");
+  if (line3) line3.classList.remove("revealed");
+
+  const startTime = performance.now();
+  const duration = 1500; // 1.5 seconds smooth intro
+
+  function frame(now) {
+    if (!isOpeningAnimationActive) return;
+    const elapsed = now - startTime;
+    const progress = Math.min(1, elapsed / duration);
+    const pct = Math.floor(progress * 100);
+
+    if (pBar) pBar.style.width = `${pct}%`;
+    if (pPct) pPct.textContent = `${pct}%`;
+
+    // Progressive terminal diagnostics logs
+    if (progress >= 0.15 && line1) line1.classList.add("revealed");
+    if (progress >= 0.45 && line2) line2.classList.add("revealed");
+    if (progress >= 0.75 && line3) line3.classList.add("revealed");
+
+    if (progress >= 0.45 && progress < 0.85 && pLabel) {
+      pLabel.textContent = "VERIFYING POWERSHELL HEURISTICS...";
+    } else if (progress >= 0.85 && pLabel) {
+      pLabel.textContent = "ALL DEFENSE MODULES OPERATIONAL";
+    }
+
+    if (progress < 1) {
+      openingAnimationTimer = requestAnimationFrame(frame);
+    } else {
+      setTimeout(() => {
+        dismissOpeningAnimation();
+      }, 160);
+    }
+  }
+
+  openingAnimationTimer = requestAnimationFrame(frame);
+
+  // Safety fallback after 3.2s to guarantee the user is never locked out
+  setTimeout(() => {
+    if (isOpeningAnimationActive) {
+      dismissOpeningAnimation();
+    }
+  }, 3200);
+}
+
+/**
+ * Dismisses the opening animation and transitions smoothly into the main website.
+ */
+function dismissOpeningAnimation() {
+  if (!isOpeningAnimationActive) return;
+  isOpeningAnimationActive = false;
+
+  if (openingAnimationTimer) {
+    cancelAnimationFrame(openingAnimationTimer);
+    openingAnimationTimer = null;
+  }
+
+  const overlay = document.getElementById("site-opening-overlay");
+  const pBar = document.getElementById("openingProgressBar");
+  const pPct = document.getElementById("openingProgressPct");
+  const pLabel = document.getElementById("openingProgressLabel");
+  const line1 = document.getElementById("openingTermLine1");
+  const line2 = document.getElementById("openingTermLine2");
+  const line3 = document.getElementById("openingTermLine3");
+
+  if (pBar) pBar.style.width = "100%";
+  if (pPct) pPct.textContent = "100%";
+  if (pLabel) pLabel.textContent = "SYSTEM READY • ENTERING WORKSPACE";
+  if (line1) line1.classList.add("revealed");
+  if (line2) line2.classList.add("revealed");
+  if (line3) line3.classList.add("revealed");
+
+  document.body.classList.remove("site-animating");
+  document.body.classList.add("site-entered");
+
+  if (overlay) {
+    overlay.classList.add("closing");
+    overlay.setAttribute("aria-hidden", "true");
+    setTimeout(() => {
+      overlay.classList.add("hidden");
+    }, 450);
+  }
+}
+
+/**
+ * Global trigger to replay the opening animation from UI button or debug console.
+ */
+function triggerOpeningAnimation() {
+  initOpeningAnimation(true);
+}
+
 /**
  * DOMContentLoaded Event Listener:
- * Fires when document structure is ready, boots up the default home view.
+ * Fires when document structure is ready, boots up the default home view and opening animation.
  */
 document.addEventListener("DOMContentLoaded", () => {
   // Render initial homepage
   switchView("home");
+
+  // Launch website opening animation
+  initOpeningAnimation();
+
+  // Handle keyboard shortcut (Esc / Space / Enter) to skip opening animation
+  window.addEventListener("keydown", (e) => {
+    if (isOpeningAnimationActive) {
+      if (e.key === "Escape" || e.key === " " || e.key === "Enter") {
+        dismissOpeningAnimation();
+      }
+    }
+  });
 });
 
 // Expose functions globally to window so inline HTML onclick and oninput handlers can invoke them
@@ -2608,3 +2745,6 @@ window.copyCheckCommand = copyCheckCommand;
 window.copyRemediation = copyRemediation;
 window.copyReportRemediation = copyReportRemediation;
 window.scrollAuditToTop = scrollAuditToTop;
+window.initOpeningAnimation = initOpeningAnimation;
+window.dismissOpeningAnimation = dismissOpeningAnimation;
+window.triggerOpeningAnimation = triggerOpeningAnimation;
